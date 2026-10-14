@@ -2,13 +2,22 @@ import 'server-only';
 import { Pool, type PoolClient } from 'pg';
 import { getStorageEnv } from './env';
 import { AppError } from './errors';
+import { SUPABASE_ROOT_CA_2021 } from './supabase-ca';
 let pool: Pool | undefined;
 export function getDatabase(): Pool | null {
   const config = getStorageEnv();
   if (!config) return null;
   // Only the connection pool is reused. Tokens never live in module/global state.
   if (!pool) {
-    pool = new Pool({ connectionString: config.databaseUrl, max: 3, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000, statement_timeout: 15000, query_timeout: 15000 });
+    pool = new Pool({
+      connectionString: config.databaseUrl,
+      ssl: { ca: SUPABASE_ROOT_CA_2021, rejectUnauthorized: true },
+      max: 3,
+      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 10000,
+      statement_timeout: 15000,
+      query_timeout: 15000,
+    });
     // Idle connection failures must not become unhandled exceptions or print DB details.
     pool.on('error', () => undefined);
   }
