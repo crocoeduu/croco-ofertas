@@ -1,5 +1,7 @@
 # Croco Ofertas
 
+Site publicado: [croco-ofertas.vercel.app](https://croco-ofertas.vercel.app). [Health check](https://croco-ofertas.vercel.app/api/health). Callback de produção confirmada: `https://croco-ofertas.vercel.app/api/mercadolivre/callback` — já configurada em `MELI_REDIRECT_URI` na Vercel. Ainda faltam Client ID e Client Secret para a conexão real. Veja `VALIDACAO.md` para resultados e limites dos testes.
+
 Base de uma central de ofertas afiliadas em Next.js 16 (App Router), React 19, TypeScript, Node.js 24 e npm. Esta etapa entrega a interface de conexões, health check e OAuth Authorization Code com PKCE S256. Não contém catálogo, preços inventados, API de afiliados simulada ou painel administrativo público.
 
 ## Instalação e execução

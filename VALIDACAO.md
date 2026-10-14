@@ -19,14 +19,23 @@ Os testes cobrem state, PKCE, vetor SHA-256 da RFC 7636, URI exata nos dois pass
 
 O smoke injeta sentinelas aleatórias somente no processo do servidor e verifica ausência no HTML, JS e respostas de erro. Também verifica CSP com nonce, HTTP 400 da callback sem parâmetros, redirect exclusivo ao host oficial quando há configuração de teste, cookies seguros e HTTP 404 em endpoints de debug/admin/arquivos de ambiente.
 
-## Publicação pendente
+## Publicação e testes públicos
 
-O conector Vercel retornou **403 forbidden** ao tentar criar `croco-ofertas` no escopo existente `eduardolu3s-projects`. O CLI informou não estar autenticado. Não foi criado projeto ou domínio remoto.
+Repositório público: [crocoeduu/croco-ofertas](https://github.com/crocoeduu/croco-ofertas), branch `main`. O [CI principal no GitHub Actions](https://github.com/crocoeduu/croco-ofertas/actions/runs/38504653069) concluiu com sucesso após a publicação do código. Dependabot está ativo; PRs automáticos de atualização não foram mesclados.
 
-O conector GitHub identificou a conta `crocoeduu`, mas não oferece criação de repositório. A página oficial de criação abriu a tela de login. A entrega contém repositório Git local na branch `main`; não houve push remoto.
+Projeto Vercel: `croco-ofertas`, Node.js 24.x, conta `eduardolu3s-projects`. O deploy de produção foi criado a partir do código do GitHub e chegou ao estado **READY**. O escopo padrão da conta autenticada permitiu a publicação no mesmo projeto/conta verificados.
 
-**Domínio real, site público, health público, callback HTTPS e login público: ainda não disponíveis.** As rotas foram implementadas e testadas localmente. Não use `croco-ofertas.vercel.app` como callback até confirmar a atribuição real após o deploy.
+Domínio estável real confirmado pela API da Vercel e por requisições públicas: **croco-ofertas.vercel.app**.
 
-Ainda é necessário configurar na Vercel: `MELI_CLIENT_ID`, `MELI_CLIENT_SECRET`, `MELI_REDIRECT_URI` com o domínio estável confirmado. Banco opcional: `DATABASE_URL` e `TOKEN_ENCRYPTION_KEY`, sempre em conjunto, e migração do esquema.
+| URL | Verificação pública |
+| --- | --- |
+| https://croco-ofertas.vercel.app/ | HTTP 200, interface da Central de Ofertas |
+| https://croco-ofertas.vercel.app/api/health | HTTP 200, exatamente `{"status":"ok"}` |
+| https://croco-ofertas.vercel.app/api/mercadolivre/callback | HTTP 400 sem parâmetros, mensagem amigável, no-store |
+| https://croco-ofertas.vercel.app/api/mercadolivre/login | HTTP 503 amigável enquanto faltam Client ID/Secret, no-store |
+
+Callback exata para cadastrar no Mercado Livre: **https://croco-ofertas.vercel.app/api/mercadolivre/callback**. O valor já foi configurado como `MELI_REDIRECT_URI` no ambiente Production da Vercel.
+
+Ainda é necessário configurar na Vercel: `MELI_CLIENT_ID` e `MELI_CLIENT_SECRET`, e fazer novo deploy. Banco opcional: `DATABASE_URL` e `TOKEN_ENCRYPTION_KEY`, sempre em conjunto, e migração do esquema. Não foram colocadas credenciais fictícias na produção.
 
 Não foram realizadas autorização real do Mercado Livre, persistência em PostgreSQL real nem rotação real de tokens, porque não foram fornecidos/configurados esses serviços e credenciais. Os adapters de banco e refresh foram testados com mocks. Sem banco, o cooldown de login pode ser contornado apagando cookies e não existe trava distribuída de callback; veja limites e configuração no README.
