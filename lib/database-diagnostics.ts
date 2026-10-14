@@ -13,5 +13,24 @@ export function databaseDiagnostic(error: unknown): DatabaseDiagnostic {
 }
 export function reportDatabaseError(error: unknown): void {
   // Only a fixed allowlisted category leaves the server. No message, stack or payload.
-  console.error(databaseDiagnostic(error));
+  const category = databaseDiagnostic(error);
+  if (category !== 'DB_AUTH_FAILED') { console.error(category); return; }
+  const sqlstate = error && typeof error === 'object' && 'code' in error && ['28P01', '28000'].includes(String(error.code)) ? String(error.code) : undefined;
+  // Metadata is allowlisted. The password is only inspected for common formatting
+  // mistakes; its value, length, and content never leave this function.
+  let target: Record<string, string | boolean | undefined> = {};
+  try {
+    const url = new URL(process.env.DATABASE_URL ?? '');
+    const username = decodeURIComponent(url.username);
+    const password = decodeURIComponent(url.password);
+    target = {
+      host: /^[a-z0-9.-]+\.supabase\.com$/.test(url.hostname) ? url.hostname : 'OTHER_HOST',
+      port: url.port || '5432',
+      username: /^postgres(?:\.[a-z0-9]{20})?$/.test(username) ? username : 'INVALID_USERNAME_FORMAT',
+      verifiedTlsRequested: url.searchParams.get('sslmode') === 'verify-full',
+      passwordWrappedInBrackets: password.startsWith('[') && password.endsWith(']'),
+      passwordHasOuterWhitespace: password.trim() !== password,
+    };
+  } catch { /* Never emit a parse error or its input. */ }
+  console.error(category, { sqlstate, ...target });
 }

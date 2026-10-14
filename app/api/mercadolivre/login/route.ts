@@ -5,6 +5,7 @@ import { cookieNames, cookieOptions, clearOAuthCookies } from '@/lib/cookies';
 import { errorResponse, privateHeaders } from '@/lib/http';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { AppError } from '@/lib/errors';
+import { verifyDatabase } from '@/lib/database-readiness';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
     if (request.nextUrl.search || request.headers.get('sec-fetch-site') === 'cross-site') throw new AppError('INVALID_INPUT');
     const env = getOAuthEnv();
     getStorageEnv(); // Fail closed if configured persistence cannot encrypt safely.
+    await verifyDatabase(); // Private server-side readiness check before OAuth.
     const rate = await enforceRateLimit(request, 'login', env.secure, env.clientSecret);
     const state = generateState(); const pkce = generatePKCE(); const names = cookieNames(env.secure);
     const response = privateHeaders(NextResponse.redirect(authorizationUrl(env, state, pkce.challenge), 302));

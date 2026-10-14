@@ -31,6 +31,9 @@ it.each([
   const error = Object.assign(new Error('password token connection-string'), { code });
   expect(databaseDiagnostic(error)).toBe(expected);
   reportDatabaseError(error);
-  expect(logger).toHaveBeenCalledExactlyOnceWith(expected);
+  if (expected === 'DB_AUTH_FAILED') expect(logger).toHaveBeenCalledExactlyOnceWith(expected, expect.objectContaining({sqlstate: code}));
+  else expect(logger).toHaveBeenCalledExactlyOnceWith(expected);
+  expect(JSON.stringify(logger.mock.calls)).not.toContain('password token connection-string');
+  expect(JSON.stringify(logger.mock.calls)).not.toContain('arbitrary-secret-code');
   logger.mockRestore();
 });

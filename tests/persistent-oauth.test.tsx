@@ -54,16 +54,16 @@ it('login → callback → tokens AES-GCM → sessão → interface conectada', 
   expect(html).not.toContain(tokenFixture.refresh_token);
 });
 it('falha de persistência não cria sessão nem mostra conexão concluída', async () => {
-  memory.query.mockResolvedValueOnce({ rowCount: 1, rows: [{ hits: 1 }] });
+  memory.query.mockResolvedValue({ rowCount: 1, rows: [{ hits: 1 }] });
   const start = await login(new NextRequest('https://example.com/api/mercadolivre/login'));
   const state = start.cookies.get('__Host-meli_state')!.value;
   const verifier = start.cookies.get('__Host-meli_pkce')!.value;
-  memory.query.mockResolvedValueOnce({ rowCount: 1, rows: [{ hits: 1 }] }).mockResolvedValueOnce({ rowCount: 1 }).mockRejectedValueOnce(Object.assign(new Error('private-db-detail'), { code: '28P01' }));
+  memory.query.mockReset().mockResolvedValueOnce({ rowCount: 1, rows: [{ hits: 1 }] }).mockResolvedValueOnce({ rowCount: 1 }).mockRejectedValueOnce(Object.assign(new Error('private-db-detail'), { code: '28P01' }));
   const logger = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   const finish = await callback(new NextRequest(`https://example.com/api/mercadolivre/callback?state=${state}&code=unit-code`, { headers: { cookie: `__Host-meli_state=${state}; __Host-meli_pkce=${verifier}` } }));
   expect(finish.status).toBe(503);
   expect(finish.cookies.get('__Host-croco_session')).toBeUndefined();
-  expect(logger).toHaveBeenCalledExactlyOnceWith('DB_AUTH_FAILED');
+  expect(logger).toHaveBeenCalledExactlyOnceWith('DB_AUTH_FAILED', expect.objectContaining({sqlstate:'28P01'}));
   expect(await finish.text()).not.toContain('private-db-detail');
   logger.mockRestore();
 });
