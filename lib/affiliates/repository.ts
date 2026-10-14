@@ -37,7 +37,8 @@ export async function getAffiliateLink(id: string, active = false): Promise<Affi
 export async function saveAffiliateLink(input: AffiliateInput, id?: string, expectedUpdatedAt?: string): Promise<AffiliateLink> {
   const values=[affiliateAccount(),input.marketplace,input.productId,input.originalUrl,input.affiliateUrl,input.channel,input.label,input.notes,input.status,input.ownLinkConfirmed];
   if (id && (!expectedUpdatedAt || !Number.isFinite(Date.parse(expectedUpdatedAt)))) throw new AppError('AFFILIATE_CONFLICT');
-  const rows=await affiliateQuery<AffiliateLink>(id ? `UPDATE offers.affiliate_links SET marketplace=$2,product_id=$3,original_url=$4,affiliate_url=$5,channel=$6,label=$7,notes=$8,status=$9,own_link_confirmed=$10,verified_at=CASE WHEN $9='verified' THEN NOW() ELSE NULL END,last_checked_at=NOW(),updated_at=NOW() WHERE account_id=$1 AND id=$11 AND updated_at=$12::timestamptz RETURNING ${fields}` :
+  // IDs already shared in cards/messages must never be repointed to another product/channel/campaign.
+  const rows=await affiliateQuery<AffiliateLink>(id ? `UPDATE offers.affiliate_links SET original_url=$4,affiliate_url=$5,notes=$8,status=$9,own_link_confirmed=$10,verified_at=CASE WHEN $9='verified' THEN NOW() ELSE NULL END,last_checked_at=NOW(),updated_at=NOW() WHERE account_id=$1 AND id=$11 AND updated_at=$12::timestamptz AND marketplace=$2 AND product_id=$3 AND channel=$6 AND label=$7 RETURNING ${fields}` :
     `INSERT INTO offers.affiliate_links (account_id,marketplace,product_id,original_url,affiliate_url,channel,label,notes,status,own_link_confirmed,verified_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,CASE WHEN $9='verified' THEN NOW() ELSE NULL END) RETURNING ${fields}`,id ? [...values,affiliateId(id),expectedUpdatedAt] : values);
   if (!rows[0]) throw new AppError('AFFILIATE_CONFLICT');
   return rows[0];
