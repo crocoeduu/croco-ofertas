@@ -5,10 +5,10 @@ import { marketUrl, priceCents, productId, searchQuery } from '../offers/validat
 import { getValidAccessToken } from './tokens';
 
 export interface SearchResult { products: Product[]; total: number; offset: number; limit: number; source?: 'marketplace' | 'catalog'; priceCoverage?: {matches:number;active:number;winners:number;priced:number} }
-type SearchResource = 'marketplace' | 'catalog_search' | 'catalog_product';
+type SearchResource = 'marketplace' | 'catalog_search' | 'catalog_product' | 'catalog_offers';
 type AccessReason = 'POLICY_DENIED' | 'FORBIDDEN';
 export class SearchAccessError extends AppError {
-  constructor(readonly resource: SearchResource, readonly reason: AccessReason) { super('MELI_SEARCH_FORBIDDEN'); }
+  constructor(readonly resource: SearchResource, readonly reason: AccessReason) { super(resource==='catalog_offers'?'MELI_PRICES_FORBIDDEN':'MELI_SEARCH_FORBIDDEN'); }
 }
 export function searchAccessDiagnostic(error: unknown) {
   return error instanceof SearchAccessError ? { resource:error.resource,reason:error.reason } : undefined;
@@ -35,7 +35,7 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
   if(!Array.isArray(data.results)||data.results.length>20||!paging||!Number.isSafeInteger(paging.total)||(paging.total as number)<0)throw new AppError('MELI_API_ERROR');
   const ids=data.results.map(value=>record(value)?.id).filter((id):id is string=>typeof id==='string'&&/^MLB[0-9]{6,18}$/.test(id));
   const unique=new Map<string,Product>(); let denied:SearchAccessError|undefined;
-  let active=0;let winners=0;
+  let active=0;let winners=0;const withoutWinner:Record<string,unknown>[]=[];
   // Consult only documented catalogue resources, once per product, four at a time.
   for(let index=0;index<ids.length;index+=4) {
     const details=await Promise.all(ids.slice(index,index+4).map(async id=>{
@@ -45,11 +45,33 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
     for(const detail of details) {
       if(!detail||detail.status!=='active')continue;
       active++;
-      const winner=record(detail.buy_box_winner);if(!winner)continue; // Never fabricate prices from a catalogue title.
+      const winner=record(detail.buy_box_winner);if(!winner){withoutWinner.push(detail);continue;} // Never fabricate prices from a catalogue title.
       winners++;
       const picture=Array.isArray(detail.pictures)?record(detail.pictures[0]):undefined;
       const product=normalizeProduct({...winner,id:winner.item_id,title:detail.name,permalink:detail.permalink,secure_thumbnail:picture?.url});
       if(product){product.catalogId=productId(detail.id);unique.set(product.id,product);}
+    }
+  }
+  // Catalogue metadata alone is not a price. Read associated listings explicitly.
+  // A denied resource stops immediately; never loop through IDs to evade a denial.
+  for(const detail of withoutWinner) {
+    if(unique.size>=20)break;
+    const id=productId(detail.id);
+    const url=new URL(`https://api.mercadolibre.com/products/${id}/items`);url.searchParams.set('limit','5');
+    const offers=await apiJson(url,token,'catalog_offers',signal);
+    if(!Array.isArray(offers.results)||offers.results.length>100)throw new AppError('MELI_API_ERROR');
+    console.info('MELI_CATALOG_OFFERS_RESULT',{
+      results:offers.results.length,
+      withBrl:offers.results.filter(value=>record(value)?.currency_id==='BRL').length,
+      withNumericPrice:offers.results.filter(value=>typeof record(value)?.price==='number').length,
+      withListingId:offers.results.filter(value=>/^MLB[0-9]{6,18}$/.test(String(record(value)?.item_id??record(value)?.id))).length,
+      parentBrl:offers.currency_id==='BRL',
+    });
+    const picture=Array.isArray(detail.pictures)?record(detail.pictures[0]):undefined;
+    for(const value of offers.results) {
+      const item=record(value);if(!item||(item.status!=null&&item.status!=='active')||item.available_quantity===0)continue;
+      const product=normalizeProduct({...item,id:item.item_id??item.id,currency_id:item.currency_id??offers.currency_id,title:item.title??detail.name,permalink:item.permalink??detail.permalink,secure_thumbnail:item.secure_thumbnail??picture?.url});
+      if(product){product.catalogId=id;unique.set(product.id,product);if(unique.size>=20)break;}
     }
   }
   if(!unique.size&&denied)throw denied;

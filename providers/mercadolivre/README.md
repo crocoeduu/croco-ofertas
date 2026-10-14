@@ -6,4 +6,6 @@ Quando a busca de anúncios retorna 403, consulta-se o buscador oficial de catá
 
 Se também houver 403 no catálogo, a consulta termina com diagnóstico allowlisted (`POLICY_DENIED`/`FORBIDDEN` e nome fixo do recurso). A aplicação não eleva escopos, tenta outros tokens ou contorna a política do provedor. 401, 429 e falhas de rede não disparam fallback.
 
+Na validação real de outubro de 2026, o catálogo retornou 20 produtos ativos sem `buy_box_winner`. Nessa situação a implementação consulta `/products/{id}/items`, com o mesmo token e limite de cinco anúncios por produto. Um 403 nesse recurso encerra a consulta imediatamente com `MELI_PRICES_FORBIDDEN`. Apenas anúncios com ID válido, preço numérico positivo, BRL informado pela API e permalink seguro podem alimentar o histórico. Logs contêm somente contagens de campos presentes, sem valores brutos ou dados da conta.
+
 Busca e link afiliado são integrações separadas. O OAuth de vendedor/conta não comprova participação no programa de afiliados. `AffiliateLinkProvider` e `DistributionProvider` continuam como contratos para a próxima etapa; nenhum link de comissão é inventado e nenhum WhatsApp é enviado.

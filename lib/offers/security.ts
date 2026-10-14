@@ -42,7 +42,7 @@ export async function readOfferBody(request: NextRequest): Promise<Record<string
 }
 
 export function offerJson(data: unknown, status = 200) { return privateHeaders(NextResponse.json(data, { status })); }
-export function offerError(error: unknown, diagnostic?: {resource:'marketplace'|'catalog_search'|'catalog_product';reason:'POLICY_DENIED'|'FORBIDDEN'}) {
+export function offerError(error: unknown, diagnostic?: {resource:'marketplace'|'catalog_search'|'catalog_product'|'catalog_offers';reason:'POLICY_DENIED'|'FORBIDDEN'}) {
   const safe = safeError(error); const response = offerJson({ error: { code: safe.code, message: safe.message, ...(diagnostic ? {diagnostic} : {}) } }, safe.status);
   if (safe.status === 429) response.headers.set('Retry-After', '60');
   return response;

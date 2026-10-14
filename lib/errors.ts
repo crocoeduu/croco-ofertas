@@ -6,6 +6,7 @@ export const errors = {
   REQUEST_INVALID: { status: 400, message: 'A solicitação é inválida.' },
   REQUEST_FORBIDDEN: { status: 403, message: 'Esta solicitação deve ser feita pela Central de Ofertas.' },
   MELI_SEARCH_FORBIDDEN: { status: 403, message: 'O Mercado Livre não liberou o acesso à busca para esta aplicação/conta. Sua conexão continua salva. Revise as permissões na área de desenvolvedores.' },
+  MELI_PRICES_FORBIDDEN: { status: 403, message: 'Sua conta consegue consultar o catálogo, mas o Mercado Livre negou o acesso aos anúncios com preços. Sua conexão continua salva; a coleta depende da liberação desse recurso para a aplicação.' },
   MELI_API_ERROR: { status: 502, message: 'Não foi possível obter os produtos do Mercado Livre agora.' },
   SEARCH_RATE_LIMITED: { status: 429, message: 'Muitas consultas. Aguarde um minuto e tente novamente.' },
   PRODUCT_NOT_FOUND: { status: 404, message: 'Este produto ainda não está no seu histórico.' },
