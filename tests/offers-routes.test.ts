@@ -2,6 +2,8 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { AppError } from '@/lib/errors';
 const mock=vi.hoisted(()=>({session:vi.fn(),search:vi.fn(),record:vi.fn(),histories:vi.fn(),exists:vi.fn(),coupons:vi.fn(),save:vi.fn()}));
+vi.mock('@/lib/affiliates/admin',()=>({isAdministrator:async()=>false}));
+vi.mock('@/lib/affiliates/service',()=>({AffiliateLinkService:class {async forProducts(){return new Map();}}}));
 vi.mock('@/lib/offers/security',async original=>({...await original<typeof import('@/lib/offers/security')>(),requireOfferSession:mock.session}));
 vi.mock('@/lib/mercadolivre/search',()=>({searchMercadoLivre:mock.search,searchAccessDiagnostic:()=>undefined}));
 vi.mock('@/lib/offers/repository',()=>({recordProducts:mock.record,listPriceHistories:mock.histories,productExists:mock.exists}));
@@ -14,7 +16,7 @@ const request=(body:unknown)=>new NextRequest('https://example.com/api/mercadoli
 beforeEach(()=>{vi.resetAllMocks();mock.session.mockResolvedValue('a'.repeat(64));mock.search.mockResolvedValue({products:[product],total:1,offset:0,limit:20});mock.histories.mockResolvedValue(new Map());mock.coupons.mockResolvedValue([]);});
 afterEach(()=>vi.unstubAllEnvs());
 it('busca → persistência → score sem histórico fabricado',async()=>{
-  const response=await search(request({query:'fone'}));expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toBe('no-store');const data=await response.json();expect(data.products[0].scoring.sufficientHistory).toBe(false);expect(data.affiliateLinksEnabled).toBe(false);expect(mock.record).toHaveBeenCalledWith('a'.repeat(64),[product]);expect(mock.session).toHaveBeenCalledWith(expect.anything(),true);
+  const response=await search(request({query:'fone'}));expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toBe('no-store');const data=await response.json();expect(data.products[0].scoring.sufficientHistory).toBe(false);expect(data.affiliateLinksEnabled).toBe(true);expect(data.products[0].affiliate.status).toBe('affiliate_pending');expect(mock.record).toHaveBeenCalledWith('a'.repeat(64),[product]);expect(mock.session).toHaveBeenCalledWith(expect.anything(),true);
 });
 it('403 de busca é independente do OAuth e não grava preços falsos',async()=>{mock.search.mockRejectedValue(new AppError('MELI_SEARCH_FORBIDDEN'));const response=await search(request({query:'fone'}));expect(response.status).toBe(403);expect((await response.json()).error.code).toBe('MELI_SEARCH_FORBIDDEN');expect(mock.record).not.toHaveBeenCalled();expect(response.headers.get('set-cookie')).toBeNull();});
 it('falha de gravação não informa histórico salvo',async()=>{mock.record.mockRejectedValue(new AppError('STORAGE_ERROR'));const response=await search(request({query:'fone'}));expect(response.status).toBe(503);expect(mock.histories).not.toHaveBeenCalled();});

@@ -131,3 +131,11 @@ export async function searchMercadoLivre(ownerHash: string, query: string, offse
     return { products: [...unique.values()], total: paging.total as number, offset, limit: 20,source:'marketplace' };
   } catch (error) { if (error instanceof AppError) throw error; throw new AppError('NETWORK_ERROR'); }
 }
+export async function revalidateMercadoLivre(ownerHash:string,id:string):Promise<{product:Product;available:boolean;checkedAt:Date}> {
+  const validId=productId(id);const token=await getValidAccessToken(ownerHash);
+  try {
+    const data=await apiJson(new URL(`https://api.mercadolibre.com/items/${validId}`),token,'marketplace',AbortSignal.timeout(10000));
+    const product=normalizeProduct(data);if(!product||product.id!==validId)throw new AppError('PRODUCT_INVALID');
+    return {product,available:data.status==='active'&&typeof data.available_quantity==='number'&&data.available_quantity>0,checkedAt:new Date()};
+  }catch(error){if(error instanceof AppError)throw error;throw new AppError('NETWORK_ERROR');}
+}

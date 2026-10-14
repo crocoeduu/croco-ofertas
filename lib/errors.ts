@@ -1,5 +1,12 @@
 import 'server-only';
 export const errors = {
+  ADMIN_REQUIRED: { status: 403, message: 'Esta operação exige a conta administradora autorizada.' },
+  AFFILIATE_INVALID: { status: 400, message: 'Revise o produto, URL HTTPS oficial, canal e confirmação de titularidade.' },
+  AFFILIATE_DUPLICATE: { status: 409, message: 'Já existe um link com este produto, canal e etiqueta. Edite o cadastro existente.' },
+  AFFILIATE_NOT_FOUND: { status: 404, message: 'Link afiliado pendente, desativado ou indisponível.' },
+  AFFILIATE_CONFLICT: { status: 409, message: 'O cadastro mudou. Atualize a página antes de salvar.' },
+  CSV_INVALID: { status: 400, message: 'CSV inválido. Use as seis colunas indicadas e no máximo 100 linhas.' },
+  OFFER_NOT_READY: { status: 409, message: 'A oferta ainda não cumpre os requisitos de divulgação.' },
   SEARCH_INVALID: { status: 400, message: 'Informe uma busca de 2 a 100 caracteres.' },
   PRODUCT_INVALID: { status: 400, message: 'O produto informado é inválido.' },
   COUPON_INVALID: { status: 400, message: 'Revise o código, desconto, condições e validade do cupom.' },

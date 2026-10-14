@@ -23,7 +23,7 @@ export async function requireOfferSession(request: NextRequest, mutation = false
   return owner;
 }
 
-export async function readOfferBody(request: NextRequest): Promise<Record<string, unknown>> {
+export async function readOfferBody(request: NextRequest, maxBytes = 4096): Promise<Record<string, unknown>> {
   if (!/^application\/json(?:;|$)/i.test(request.headers.get('content-type') ?? '') || !request.body) throw new AppError('REQUEST_INVALID');
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = []; let size = 0;
@@ -31,7 +31,7 @@ export async function readOfferBody(request: NextRequest): Promise<Record<string
     for (;;) {
       const { done, value } = await reader.read(); if (done) break;
       size += value.byteLength;
-      if (size > 4096) { await reader.cancel(); throw new AppError('REQUEST_INVALID'); }
+      if (size > maxBytes) { await reader.cancel(); throw new AppError('REQUEST_INVALID'); }
       chunks.push(value);
     }
     const data: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));

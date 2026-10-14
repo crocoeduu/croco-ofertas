@@ -3,6 +3,7 @@
 node_modules/
 .next/
 .vercel/
+supabase/.temp/
 coverage/
 *.tsbuildinfo
 *.log

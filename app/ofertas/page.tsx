@@ -14,6 +14,6 @@ export default async function OffersPage() {
     <main><section className="intro"><div className="eyebrow"><span/> ENCONTRE E ACOMPANHE</div><h1>Radar de <span>Ofertas.</span></h1><p>Produtos reais. Histórico próprio.<br/>Compare oportunidades com critérios claros.</p></section>
       {unavailable && <div className="notice" role="alert">Não foi possível verificar sua conexão agora. Tente novamente mais tarde.</div>}
       <OffersExplorer connected={connected}/><CouponsPanel connected={connected}/>
-      <section className="notice"><strong>Próximas integrações</strong><span>Links afiliados e distribuição no WhatsApp entram depois da validação da busca e dos preços. Os links atuais abrem o anúncio original; nenhum envio automático está ativo.</span></section>
+      <section className="notice"><strong>Afiliados</strong><span>Links oficiais cadastrados pelo administrador são reutilizados por produto e canal. Ofertas sem link ficam pendentes. Nenhum envio automático está ativo.</span><Link href="/afiliados">Links de afiliado e preparação de ofertas →</Link></section>
     </main><footer><span>© {new Date().getFullYear()} Croco Ofertas</span><Link href="/">Central de conexões</Link></footer></div>;
 }

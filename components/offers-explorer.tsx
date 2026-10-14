@@ -1,12 +1,12 @@
 'use client';
 import { useState, type FormEvent } from 'react';
-import type { Product } from '@/lib/offers/contracts';
+import type { Product, AffiliateResolution } from '@/lib/offers/contracts';
 import type { OfferScore } from '@/lib/offers/scoring';
 import type { Coupon } from '@/lib/offers/coupons';
 import type { SearchResult } from '@/lib/mercadolivre/search';
 
-type Offer = Product & { scoring: OfferScore; coupons: Coupon[] };
-type Results = Omit<SearchResult,'products'> & { products: Offer[]; observedAt: string };
+type Offer = Product & { scoring: OfferScore; coupons: Coupon[]; affiliate: AffiliateResolution };
+type Results = Omit<SearchResult,'products'> & { products: Offer[]; observedAt: string; administrator:boolean };
 type History = { price: number; currency: string; observedAt: string; condition?: string }[];
 const money = (value: number) => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(value);
 const date = (value: string) => new Date(value).toLocaleString('pt-BR');
@@ -47,7 +47,9 @@ export function OffersExplorer({connected}:{connected:boolean}) {
       <span className="score-badge">Score {product.scoring.score}/100 · {product.scoring.sufficientHistory?'Com histórico':'Provisório'}</span>
       <ul className="score-reasons">{product.scoring.reasons.map(reason=><li key={reason}>{reason}</li>)}</ul>
       {product.coupons.length>0 && <p className="coupon-note">Cupons cadastrados: {product.coupons.map(c=>`${c.code} (${c.verified?'verificado':'não verificado'})`).join(', ')}. Condições e aplicação precisam ser confirmadas.</p>}
-      <a className="product-link" href={product.permalink} target="_blank" rel="noopener noreferrer">{product.catalogId?'Ver produto no Mercado Livre':'Ver no Mercado Livre'} ↗</a>
+      <p className="coupon-note">{product.affiliate.status==='affiliate_ready'?'Link afiliado pronto · cadastrado pelo administrador':'Link afiliado pendente'}</p>
+      {product.affiliate.status==='affiliate_ready'?<><a className="product-link" href={product.affiliate.clickPath} rel="sponsored">Ver oferta →</a><p className="offer-help">Publicidade · Podemos receber comissão em compras elegíveis. Titularidade declarada pelo administrador.</p></>:<button disabled className="product-link">Ver oferta · link afiliado pendente</button>}
+      {results.administrator&&<a href={`/afiliados?product_id=${product.id}#links`}>{product.affiliate.status==='affiliate_ready'?'Editar link afiliado':'Cadastrar link afiliado'}</a>}
       <details onToggle={event=>{if(event.currentTarget.open)void loadHistory(product.id);}}><summary>Histórico de preços · 30 dias</summary>
         {historyErrors[product.id]?<p role="alert">{historyErrors[product.id]}</p>:!histories[product.id]?<p>Carregando…</p>:<div className="history-scroll"><table><caption>Preços observados deste anúncio</caption><thead><tr><th>Data</th><th>Preço</th></tr></thead><tbody>{histories[product.id].map(entry=><tr key={entry.observedAt}><td>{date(entry.observedAt)}</td><td>{money(entry.price)}</td></tr>)}</tbody></table></div>}
       </details>

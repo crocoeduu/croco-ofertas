@@ -6,6 +6,8 @@ import { listPriceHistories, recordProducts } from '@/lib/offers/repository';
 import { scoreOffer } from '@/lib/offers/scoring';
 import { eligibleCoupons, listCoupons } from '@/lib/offers/coupons';
 import { searchQuery } from '@/lib/offers/validation';
+import { AffiliateLinkService } from '@/lib/affiliates/service';
+import { isAdministrator } from '@/lib/affiliates/admin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
@@ -17,8 +19,8 @@ export async function POST(request: NextRequest) {
     if (typeof offset !== 'number') throw new AppError('SEARCH_INVALID');
     const result = await searchMercadoLivre(owner,query,offset);
     await recordProducts(owner,result.products);
-    const [histories,coupons] = await Promise.all([listPriceHistories(owner,result.products.map(product => product.id)),listCoupons(owner)]);
+    const [histories,coupons,affiliates,administrator] = await Promise.all([listPriceHistories(owner,result.products.map(product => product.id)),listCoupons(owner),new AffiliateLinkService().forProducts(result.products,'site'),isAdministrator(owner)]);
     const now = new Date();
-    return offerJson({ ...result,products:result.products.map(product => ({...product,scoring:scoreOffer(product,histories.get(product.id) ?? [],now),coupons:eligibleCoupons(coupons,product,now)})),observedAt:now.toISOString(),affiliateLinksEnabled:false });
+    return offerJson({ ...result,products:result.products.map(product => ({...product,scoring:scoreOffer(product,histories.get(product.id) ?? [],now),coupons:eligibleCoupons(coupons,product,now),affiliate:affiliates.get(product.id)??{status:'affiliate_pending'}})),observedAt:now.toISOString(),affiliateLinksEnabled:true,administrator });
   } catch (error) { return offerError(error,searchAccessDiagnostic(error)); }
 }

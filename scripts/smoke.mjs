@@ -17,6 +17,11 @@ try {
   const nonce=csp.match(/'nonce-([^']+)'/)[1];assert(html.includes(`nonce="${nonce}"`));assert.equal(home.headers.get('x-frame-options'),'DENY');
   const health=await request('/api/health');assert.deepEqual(await health.json(),{status:'ok'});
   const radar=await request('/ofertas');assert.equal(radar.status,200);const radarHtml=await radar.text();assert(radarHtml.includes('Radar de'));assert(sentinels.every(secret=>!radarHtml.includes(secret)));
+  const affiliates=await request('/afiliados');assert.equal(affiliates.status,200);const affiliatesHtml=await affiliates.text();assert(affiliatesHtml.includes('Acesso administrativo'));assert(sentinels.every(secret=>!affiliatesHtml.includes(secret)));assert(!affiliatesHtml.includes('Minha URL afiliada oficial'));
+  for(const path of ['/api/admin/affiliates','/api/admin/distribution'])assert.equal((await request(path)).status,401);
+  const forbiddenAffiliate=await fetch(`http://127.0.0.1:${port}/api/admin/affiliates`,{method:'POST',headers:{Origin:'https://evil.example','Content-Type':'application/json'},body:'{}'});assert.equal(forbiddenAffiliate.status,403);
+  const openRedirect=await request('/go/mercadolivre/12345678-1234-4123-8123-123456789012?url=https://evil.example');assert.equal(openRedirect.status,400);assert.equal(openRedirect.headers.get('location'),null);
+  assert.equal((await request('/go/mercadolivre/invalid-id')).status,404);
   const privateSearch=await fetch(`http://127.0.0.1:${port}/api/mercadolivre/search`,{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json'},body:JSON.stringify({query:'fone'}),signal:globalThis.AbortSignal.timeout(5000)});assert.equal(privateSearch.status,401);assert.equal(privateSearch.headers.get('cache-control'),'no-store');
   for(const path of ['/api/mercadolivre/products/MLB123456789/history','/api/offers/coupons'])assert.equal((await request(path)).status,401);
   const login=await request('/api/mercadolivre/login');assert.equal(login.status,302);const location=new URL(login.headers.get('location'));assert.equal(location.origin,'https://auth.mercadolivre.com.br');assert.equal(location.searchParams.get('redirect_uri'),'https://example.com/api/mercadolivre/callback');assert.equal(location.searchParams.get('code_challenge_method'),'S256');

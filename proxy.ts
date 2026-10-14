@@ -16,4 +16,5 @@ export function proxy(request: NextRequest) {
   response.headers.set('Cache-Control', 'private, no-store');
   return response;
 }
-export const config = { matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)'] };
+// /go has its own script-free CSP and a restricted official form redirect allowlist.
+export const config = { matcher: ['/((?!api|go/|_next/static|_next/image|favicon.ico|.*\\..*).*)'] };
