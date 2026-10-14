@@ -10,6 +10,12 @@ type AccessReason = 'POLICY_DENIED' | 'FORBIDDEN';
 export class SearchAccessError extends AppError {
   constructor(readonly resource: SearchResource, readonly reason: AccessReason) { super(resource==='catalog_offers'?'MELI_PRICES_FORBIDDEN':'MELI_SEARCH_FORBIDDEN'); }
 }
+class SearchResourceMissingError extends AppError {
+  constructor(readonly resource:SearchResource){super('PRODUCT_NOT_FOUND');}
+}
+function cataloguePermalink(detail:Record<string,unknown>) {
+  return marketUrl(detail.permalink)??`https://www.mercadolivre.com.br/p/${productId(detail.id)}`;
+}
 export function searchAccessDiagnostic(error: unknown) {
   return error instanceof SearchAccessError ? { resource:error.resource,reason:error.reason } : undefined;
 }
@@ -25,6 +31,7 @@ async function apiJson(url: URL, token: string, resource: SearchResource, signal
     throw new SearchAccessError(resource,reason);
   }
   if(response.status===401)throw new AppError('CONNECTION_MISSING');
+  if(response.status===404)throw new SearchResourceMissingError(resource);
   if(response.status===429)throw new AppError('SEARCH_RATE_LIMITED');
   if(!response.ok||!/^application\/json(?:;|$)/i.test(response.headers.get('content-type')??''))throw new AppError('MELI_API_ERROR');
   const raw:unknown=await response.json();
@@ -48,7 +55,7 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
   for(let index=0;index<ids.length;index+=4) {
     const details=await Promise.all(ids.slice(index,index+4).map(async id=>{
       try {return await apiJson(new URL(`https://api.mercadolibre.com/products/${id}`),token,'catalog_product',signal);}
-      catch(error){if(error instanceof SearchAccessError){denied=error;return null;}throw error;}
+      catch(error){if(error instanceof SearchAccessError){denied=error;return null;}if(error instanceof SearchResourceMissingError)return null;throw error;}
     }));
     for(const detail of details) {
       if(!detail||detail.status!=='active')continue;
@@ -56,7 +63,7 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
       const winner=record(detail.buy_box_winner);if(!winner){withoutWinner.push(detail);continue;} // Never fabricate prices from a catalogue title.
       winners++;
       const picture=Array.isArray(detail.pictures)?record(detail.pictures[0]):undefined;
-      const product=normalizeProduct({...winner,id:winner.item_id,title:detail.name,permalink:detail.permalink,secure_thumbnail:picture?.url});
+      const product=normalizeProduct({...winner,id:winner.item_id,title:detail.name,permalink:cataloguePermalink(detail),secure_thumbnail:picture?.url});
       if(product){product.catalogId=productId(detail.id);unique.set(product.id,product);}
     }
   }
@@ -66,7 +73,9 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
     if(unique.size>=20)break;
     const id=productId(detail.id);
     const url=new URL(`https://api.mercadolibre.com/products/${id}/items`);
-    const offers=await apiJson(url,token,'catalog_offers',signal);
+    let offers:Record<string,unknown>;
+    try{offers=await apiJson(url,token,'catalog_offers',signal);}
+    catch(error){if(error instanceof SearchResourceMissingError)continue;throw error;}
     if(!Array.isArray(offers.results)||offers.results.length>100)throw new AppError('MELI_API_ERROR');
     console.info('MELI_CATALOG_OFFERS_RESULT',{
       results:offers.results.length,
@@ -78,7 +87,7 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
     const picture=Array.isArray(detail.pictures)?record(detail.pictures[0]):undefined;
     for(const value of offers.results) {
       const item=record(value);if(!item||(item.status!=null&&item.status!=='active')||item.available_quantity===0)continue;
-      const product=normalizeProduct({...item,id:item.item_id??item.id,currency_id:item.currency_id??offers.currency_id,title:item.title??detail.name,permalink:item.permalink??detail.permalink,secure_thumbnail:item.secure_thumbnail??picture?.url});
+      const product=normalizeProduct({...item,id:item.item_id??item.id,currency_id:item.currency_id??offers.currency_id,title:item.title??detail.name,permalink:marketUrl(item.permalink)??cataloguePermalink(detail),secure_thumbnail:item.secure_thumbnail??picture?.url});
       if(product){product.catalogId=id;unique.set(product.id,product);if(unique.size>=20)break;}
     }
   }
