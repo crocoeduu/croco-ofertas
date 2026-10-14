@@ -4,6 +4,7 @@ import { getDatabase, transaction } from '../database';
 import { getOAuthEnv, getStorageEnv } from '../env';
 import { decrypt, encrypt, type EncryptedValue } from '../crypto';
 import { AppError } from '../errors';
+import { storageError } from '../storage-error';
 import { refreshMercadoLivreToken } from './oauth';
 import type { OAuthTokenResponse, StoredTokens, TokenStorage } from './types';
 interface TokenRow { owner_hash: string; user_id: string; access_token: EncryptedValue; refresh_token: EncryptedValue; expires_at: Date; scope: string }
@@ -20,19 +21,19 @@ async function write(client: Pick<PoolClient, 'query'>, ownerHash: string, token
 }
 export async function saveMercadoLivreTokens(ownerHash: string, tokens: OAuthTokenResponse) {
   const db = getDatabase(); if (!db) throw new AppError('STORAGE_ERROR');
-  try { await write(db, ownerHash, tokens); } catch { throw new AppError('STORAGE_ERROR'); }
+  try { await write(db, ownerHash, tokens); } catch (error) { throw storageError(error); }
 }
 export async function getMercadoLivreTokens(ownerHash: string): Promise<StoredTokens | null> {
   const db = getDatabase(); if (!db) return null;
   try { const result = await db.query<TokenRow>('SELECT * FROM meli_connections WHERE owner_hash=$1 AND session_expires_at>NOW()', [ownerHash]); return result.rows[0] ? unpack(result.rows[0]) : null; }
-  catch { throw new AppError('STORAGE_ERROR'); }
+  catch (error) { throw storageError(error); }
 }
 export const updateMercadoLivreTokens = saveMercadoLivreTokens;
 export const tokenStorage: TokenStorage = { saveMercadoLivreTokens, getMercadoLivreTokens, updateMercadoLivreTokens };
 export async function hasConnection(ownerHash: string): Promise<boolean> {
   const db = getDatabase(); if (!db) return false;
   try { const result = await db.query('SELECT 1 FROM meli_connections WHERE owner_hash=$1 AND session_expires_at>NOW()', [ownerHash]); return result.rowCount === 1; }
-  catch { throw new AppError('STORAGE_ERROR'); }
+  catch (error) { throw storageError(error); }
 }
 export async function getValidAccessToken(ownerHash: string): Promise<string> {
   // Serialize refresh per session across serverless instances. Do not retry a rotated refresh token.

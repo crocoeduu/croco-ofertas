@@ -1,5 +1,3 @@
-import 'server-only';
-
 // Public Supabase Root 2021 CA used to verify the TLS certificate presented by
 // Supabase Postgres/pooler endpoints. This is a public trust anchor, not a secret.
 // SHA-256 fingerprint:

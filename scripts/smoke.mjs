@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 const sentinels = Array.from({length:3},()=>randomBytes(32).toString('hex'));
 const port = 3217;
-const server = spawn(process.execPath, ['node_modules/next/dist/bin/next','start','-p',String(port)], { env: { ...process.env, NODE_ENV:'production', MELI_CLIENT_ID:'123456', MELI_CLIENT_SECRET:sentinels[0], MELI_ACCESS_TOKEN:sentinels[1], MELI_REFRESH_TOKEN:sentinels[2], MELI_REDIRECT_URI:'https://example.com/api/mercadolivre/callback',DATABASE_URL:'',TOKEN_ENCRYPTION_KEY:'' }, stdio:'ignore' });
-const request = path => fetch(`http://localhost:${port}${path}`,{redirect:'manual'});
+const server = spawn(process.execPath, ['node_modules/next/dist/bin/next','start','-H','127.0.0.1','-p',String(port)], { env: { ...process.env, NODE_ENV:'production', MELI_CLIENT_ID:'123456', MELI_CLIENT_SECRET:sentinels[0], MELI_ACCESS_TOKEN:sentinels[1], MELI_REFRESH_TOKEN:sentinels[2], MELI_REDIRECT_URI:'https://example.com/api/mercadolivre/callback',DATABASE_URL:'',TOKEN_ENCRYPTION_KEY:'' }, stdio:'ignore' });
+const request = path => fetch(`http://127.0.0.1:${port}${path}`,{redirect:'manual',signal:globalThis.AbortSignal.timeout(5000)});
 try {
   let ready=false;
   for(let attempt=0;attempt<40;attempt++) { try { if((await request('/api/health')).ok) { ready=true; break; } } catch { /* Server may still be starting. */ } await new Promise(resolve=>setTimeout(resolve,250)); }

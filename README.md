@@ -88,7 +88,7 @@ Refresh da callback após limpeza retorna erro seguro. Com PostgreSQL, o hash do
 
 ## PostgreSQL e criptografia
 
-Use conexão compatível com serverless (preferencialmente endpoint com pool do provedor). Configure `DATABASE_URL` com `sslmode=verify-full`; certificados são verificados e não há opção que desative a verificação. Se seu provedor exige uma CA própria, ajuste a integração com a CA oficial antes de usar. Configure a chave AES e execute, a partir de ambiente privado:
+Use conexão compatível com serverless (preferencialmente endpoint com pool do provedor). Configure `DATABASE_URL` com `sslmode=verify-full`; certificados são verificados e não há opção que desative a verificação. O backend e os scripts privados removem os parâmetros SSL da URL antes de passá-la ao pg e configuram TLS explicitamente, com validação de certificado e hostname. O conjunto de confiança inclui as CAs públicas do Node e a CA oficial Supabase Root 2021; nunca se desabilita a validação. Configure a chave AES e execute, a partir de ambiente privado:
 
 ```sh
 npm run db:migrate
@@ -154,3 +154,5 @@ Os códigos internos incluem ENV_MISSING, ENV_INVALID, INVALID_STATE, PKCE_MISSI
 `lib/offers/contracts.ts` separa MercadoLivreSearchService, PriceHistoryService, OfferScoringService, AffiliateLinkService, AffiliateLinkProvider, CouponService e DistributionProvider. `providers/mercadolivre` e `providers/shopee` registram os limites da etapa atual.
 
 Campos como quantidade vendida, preço anterior, reputação e frete são opcionais, pois dependem de permissões e do que a API realmente oferece. Descontos devem ser confrontados com histórico próprio de observações; não considere um “OFF” informado pelo anúncio como comprovação. Busca de produtos e geração de links afiliados são funções distintas. Novas integrações serão oficiais, sem inventar APIs de Shopee/afiliados ou automatizar WhatsApp Web. Futuras APIs administrativas precisam de autenticação, autorização server-side e controles CSRF antes de existir; robots/noindex não são segurança.
+
+Diagnóstico privado (com variáveis injetadas no ambiente seguro): `npm run db:check` executa `SELECT 1` e consultas sem tokens nas três tabelas. O servidor registra somente categorias fixas `DB_*`; nunca mensagens, URLs, senhas ou tokens.

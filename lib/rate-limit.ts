@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from './database';
 import { AppError } from './errors';
+import { storageError } from './storage-error';
 import { digest } from './crypto';
 import { cookieNames, cookieOptions } from './cookies';
 export interface RateLimitBackend { consume(key: string, limit: number, windowSeconds: number): Promise<boolean> }
@@ -14,7 +15,7 @@ export class PostgresRateLimit implements RateLimitBackend {
       const result = await db.query<{ hits: number }>(`INSERT INTO rate_limit_buckets (key,bucket,hits,expires_at) VALUES ($1,$2,1,NOW()+make_interval(secs=>$3))
         ON CONFLICT(key,bucket) DO UPDATE SET hits=rate_limit_buckets.hits+1 RETURNING hits`, [key, bucket, windowSeconds * 2]);
       return result.rows[0].hits <= limit;
-    } catch { throw new AppError('STORAGE_ERROR'); }
+    } catch (error) { throw storageError(error); }
   }
 }
 function sign(value: string, secret: string) { return createHmac('sha256', secret).update(`rate:${value}`).digest('base64url'); }
@@ -40,5 +41,5 @@ export async function consumeOAuthState(state: string) {
   try {
     const result = await db.query('INSERT INTO used_oauth_states (state_hash,expires_at) VALUES ($1,NOW()+INTERVAL \'15 minutes\') ON CONFLICT DO NOTHING RETURNING state_hash', [digest(state)]);
     if (result.rowCount !== 1) throw new AppError('INVALID_STATE');
-  } catch (error) { if (error instanceof AppError) throw error; throw new AppError('STORAGE_ERROR'); }
+  } catch (error) { throw storageError(error); }
 }
