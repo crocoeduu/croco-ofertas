@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import pg from 'pg';
 import { postgresConfig } from '../lib/postgres-config.ts';
 import { reportDatabaseError } from '../lib/database-diagnostics.ts';
@@ -12,6 +12,11 @@ try {
   client = new pg.Client(postgresConfig(url));
   await client.connect();
   await client.query(await readFile(new URL('../db/001_initial.sql', import.meta.url), 'utf8'));
+  // Additive, idempotent migrations only. Never migrate during an OAuth request/build.
+  const folder = new URL('../supabase/migrations/', import.meta.url);
+  for (const file of (await readdir(folder)).filter(name => /^\d{14}_[a-z0-9_]+\.sql$/.test(name)).sort()) {
+    await client.query(await readFile(new URL(file, folder), 'utf8'));
+  }
   console.log('Migração concluída.');
 } catch (error) { reportDatabaseError(error); process.exitCode = 1; }
 finally { await client?.end().catch(() => undefined); }

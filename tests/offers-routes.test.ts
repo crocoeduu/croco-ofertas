@@ -1,0 +1,23 @@
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+import { AppError } from '@/lib/errors';
+const mock=vi.hoisted(()=>({session:vi.fn(),search:vi.fn(),record:vi.fn(),histories:vi.fn(),exists:vi.fn(),coupons:vi.fn(),save:vi.fn()}));
+vi.mock('@/lib/offers/security',async original=>({...await original<typeof import('@/lib/offers/security')>(),requireOfferSession:mock.session}));
+vi.mock('@/lib/mercadolivre/search',()=>({searchMercadoLivre:mock.search}));
+vi.mock('@/lib/offers/repository',()=>({recordProducts:mock.record,listPriceHistories:mock.histories,productExists:mock.exists}));
+vi.mock('@/lib/offers/coupons',async original=>({...await original<typeof import('@/lib/offers/coupons')>(),listCoupons:mock.coupons,saveCoupon:mock.save}));
+import { POST as search } from '@/app/api/mercadolivre/search/route';
+import { GET as history } from '@/app/api/mercadolivre/products/[id]/history/route';
+import { POST as coupon } from '@/app/api/offers/coupons/route';
+const product={provider:'mercadolivre',id:'MLB123456789',name:'Fone',price:80,currency:'BRL',permalink:'https://produto.mercadolivre.com.br/MLB-123456789',condition:'new'};
+const request=(body:unknown)=>new NextRequest('https://example.com/api/mercadolivre/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+beforeEach(()=>{vi.resetAllMocks();mock.session.mockResolvedValue('a'.repeat(64));mock.search.mockResolvedValue({products:[product],total:1,offset:0,limit:20});mock.histories.mockResolvedValue(new Map());mock.coupons.mockResolvedValue([]);});
+afterEach(()=>vi.unstubAllEnvs());
+it('busca → persistência → score sem histórico fabricado',async()=>{
+  const response=await search(request({query:'fone'}));expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toBe('no-store');const data=await response.json();expect(data.products[0].scoring.sufficientHistory).toBe(false);expect(data.affiliateLinksEnabled).toBe(false);expect(mock.record).toHaveBeenCalledWith('a'.repeat(64),[product]);expect(mock.session).toHaveBeenCalledWith(expect.anything(),true);
+});
+it('403 de busca é independente do OAuth e não grava preços falsos',async()=>{mock.search.mockRejectedValue(new AppError('MELI_SEARCH_FORBIDDEN'));const response=await search(request({query:'fone'}));expect(response.status).toBe(403);expect((await response.json()).error.code).toBe('MELI_SEARCH_FORBIDDEN');expect(mock.record).not.toHaveBeenCalled();expect(response.headers.get('set-cookie')).toBeNull();});
+it('falha de gravação não informa histórico salvo',async()=>{mock.record.mockRejectedValue(new AppError('STORAGE_ERROR'));const response=await search(request({query:'fone'}));expect(response.status).toBe(503);expect(mock.histories).not.toHaveBeenCalled();});
+it('sessão de outro proprietário não encontra produto',async()=>{mock.exists.mockResolvedValue(false);const response=await history(new NextRequest('https://example.com/api/mercadolivre/products/MLB123456789/history'),{params:Promise.resolve({id:product.id})});expect(response.status).toBe(404);expect(mock.exists).toHaveBeenCalledWith('a'.repeat(64),product.id);expect(mock.histories).not.toHaveBeenCalled();});
+it('verificação de cupom nunca vem do visitante',async()=>{const response=await coupon(request({code:'TESTE10',kind:'percent',amount:10,expiresAt:'2099-01-01T00:00:00Z',verified:true}));expect(response.status).toBe(400);expect(mock.save).not.toHaveBeenCalled();});
+it('erros inesperados não exibem mensagens/credenciais internas',async()=>{mock.search.mockRejectedValue(new Error('mock-private-detail'));const response=await search(request({query:'fone'}));expect(await response.text()).not.toContain('mock-private-detail');});

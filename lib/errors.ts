@@ -1,5 +1,14 @@
 import 'server-only';
 export const errors = {
+  SEARCH_INVALID: { status: 400, message: 'Informe uma busca de 2 a 100 caracteres.' },
+  PRODUCT_INVALID: { status: 400, message: 'O produto informado é inválido.' },
+  COUPON_INVALID: { status: 400, message: 'Revise o código, desconto, condições e validade do cupom.' },
+  REQUEST_INVALID: { status: 400, message: 'A solicitação é inválida.' },
+  REQUEST_FORBIDDEN: { status: 403, message: 'Esta solicitação deve ser feita pela Central de Ofertas.' },
+  MELI_SEARCH_FORBIDDEN: { status: 403, message: 'O Mercado Livre não liberou o acesso à busca para esta aplicação/conta. Sua conexão continua salva. Revise as permissões na área de desenvolvedores.' },
+  MELI_API_ERROR: { status: 502, message: 'Não foi possível obter os produtos do Mercado Livre agora.' },
+  SEARCH_RATE_LIMITED: { status: 429, message: 'Muitas consultas. Aguarde um minuto e tente novamente.' },
+  PRODUCT_NOT_FOUND: { status: 404, message: 'Este produto ainda não está no seu histórico.' },
   ENV_MISSING: { status: 503, message: 'A conexão com o Mercado Livre ainda não foi configurada.' },
   ENV_INVALID: { status: 503, message: 'A configuração da conexão precisa ser revisada.' },
   INVALID_STATE: { status: 400, message: 'A autorização é inválida ou expirou. Inicie uma nova conexão.' },

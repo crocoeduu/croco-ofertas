@@ -1,8 +1,8 @@
 # Croco Ofertas
 
-Site publicado: [croco-ofertas.vercel.app](https://croco-ofertas.vercel.app). [Health check](https://croco-ofertas.vercel.app/api/health). Callback de produção confirmada: `https://croco-ofertas.vercel.app/api/mercadolivre/callback` — já configurada em `MELI_REDIRECT_URI` na Vercel. Ainda faltam Client ID e Client Secret para a conexão real. Veja `VALIDACAO.md` para resultados e limites dos testes.
+Site publicado: [croco-ofertas.vercel.app](https://croco-ofertas.vercel.app). [Radar de Ofertas](https://croco-ofertas.vercel.app/ofertas). [Health check](https://croco-ofertas.vercel.app/api/health). Callback de produção: `https://croco-ofertas.vercel.app/api/mercadolivre/callback`. OAuth e persistência criptografada estão configurados. Veja `VALIDACAO.md` para resultados e limites dos testes anteriores e a seção Radar abaixo para esta etapa.
 
-Base de uma central de ofertas afiliadas em Next.js 16 (App Router), React 19, TypeScript, Node.js 24 e npm. Esta etapa entrega a interface de conexões, health check e OAuth Authorization Code com PKCE S256. Não contém catálogo, preços inventados, API de afiliados simulada ou painel administrativo público.
+Central de ofertas em Next.js 16 (App Router), React 19, TypeScript, Node.js 24 e npm: OAuth Authorization Code com PKCE S256, persistência AES-GCM, busca backend de anúncios, histórico próprio, scoring explicável e cadastro de cupons não verificados. Afiliados e envio ao WhatsApp são etapas seguintes; links atuais não geram comissão.
 
 ## Instalação e execução
 
@@ -56,7 +56,7 @@ Em **Project → Settings → Environment Variables**, configure para Production
 | `MELI_CLIENT_ID` | Obrigatória para iniciar OAuth |
 | `MELI_CLIENT_SECRET` | Obrigatória para iniciar OAuth; segredo server-side |
 | `MELI_REDIRECT_URI` | Obrigatória; callback HTTPS exata do domínio estável real |
-| `DATABASE_URL` | Opcional nesta etapa; PostgreSQL com TLS verificado |
+| `DATABASE_URL` | Obrigatória para persistência e Radar; PostgreSQL com TLS verificado |
 | `TOKEN_ENCRYPTION_KEY` | Obrigatória quando há banco; 32 bytes em hexadecimal (64 caracteres) |
 
 As duas últimas ficam **ausentes** quando não há banco; não cadastre placeholders como valores de produção. Uma configuração parcial ou inválida de banco falha de forma segura. Gere a chave com um gerenciador de segredos ou `crypto.randomBytes(32)` em ambiente privado; não cole a chave no chat, em logs ou no Git. A chave de criptografia deve permanecer estável para permitir a leitura dos tokens existentes. Rotação exige migração controlada dos registros, não apenas troca da variável.
@@ -94,7 +94,7 @@ Use conexão compatível com serverless (preferencialmente endpoint com pool do 
 npm run db:migrate
 ```
 
-O script lê `.env.local` sem imprimir a URL. A migração `db/001_initial.sql` é idempotente e não é executada durante o build. Restrinja o usuário de banco ao esquema/tabelas necessários; não use credenciais administrativas da conta de hospedagem na aplicação. Use `db/cleanup.sql` em um agendador do banco para remover buckets e states expirados e sessões encerradas.
+O script lê `.env.local` sem imprimir a URL. Aplica `db/001_initial.sql` e as migrações aditivas e idempotentes em `supabase/migrations`, em ordem. Não é executado durante o build. Restrinja o usuário de banco ao esquema/tabelas necessários; não use credenciais administrativas da conta de hospedagem na aplicação. Use `db/cleanup.sql` em um agendador do banco para remover buckets e states expirados e sessões encerradas.
 
 `saveMercadoLivreTokens`, `getMercadoLivreTokens` e `updateMercadoLivreTokens` formam a abstração de armazenamento. **Access e refresh tokens** são criptografados com AES-256-GCM da biblioteca nativa Node, IV aleatório de 12 bytes e tag autenticadora de 16 bytes. O contexto autenticado vincula cada ciphertext à sessão e ao tipo de token, impedindo troca de registros entre sessões. A chave nunca é armazenada junto ao ciphertext. Não há arquivos locais de tokens, SQLite ou fallback inseguro.
 
@@ -150,6 +150,29 @@ Access/refresh tokens vazados são comprometidos: revogue a autorização/rotaci
 Os códigos internos incluem ENV_MISSING, ENV_INVALID, INVALID_STATE, PKCE_MISSING, CODE_MISSING, ACCESS_DENIED, TOKEN_ENDPOINT_ERROR, RATE_LIMITED, NETWORK_ERROR e STORAGE_ERROR. A mensagem pública é selecionada por uma lista fixa; valores do visitante, stack traces e erros do banco não são interpolados.
 
 ## Expansão futura
+
+### Radar de Ofertas
+
+`/ofertas` usa a sessão opaca já criada pelo OAuth, sem alterar o callback, os cookies ou a chave AES. Rotas:
+
+- `POST /api/mercadolivre/search`: JSON `{ "query": "fone bluetooth", "offset": 0 }`. Origem exata obrigatória, sessão válida e limites persistentes por sessão/IP. Busca 20 anúncios por página no site MLB, somente BRL. Tokens não entram no JSON público.
+- `GET /api/mercadolivre/products/MLB123456789/history`: até 30 dias de coletas, limitado aos produtos da sessão.
+- `GET /api/offers/coupons` e `POST /api/offers/coupons`: cupons da sessão. Cadastro manual contém código, tipo/valor, compra mínima, teto, anúncio opcional e datas. O cliente não pode marcar como verificado.
+
+A migração `supabase/migrations/20261014212846_offers_products_history_coupons.sql` cria o schema privado `offers`, com `products`, `price_observations` e `coupons`. RLS está ativo sem políticas públicas; `anon`/`authenticated` não têm acesso. O Data API permanece desligado. O backend `pg` aplica ownership em todas as consultas. Não há migração automática em login/callback nem no build.
+
+Preços ficam em centavos inteiros. Produto e observação são salvos em uma transação, com no máximo uma observação por hora/anúncio/sessão. O score v1 compara a mediana de cada dia e depois a mediana dos dias, exigindo três dias anteriores com dados comparáveis (mesmo anúncio, moeda e condição), nos últimos 30 dias. O dia atual não compõe a referência. O score provisório fica limitado a 35/100; desconto anunciado é identificado como informação do anúncio. Cupom manual não altera preço ou score.
+
+O histórico pertence à sessão atual; uma reconexão cria outra sessão e não transfere automaticamente o histórico. Encerramento/limpeza da conexão remove os dados vinculados. Nesta etapa a coleta ocorre nas buscas, sem agendador automático. Preço pode variar por opção, conta, quantidade, pagamento e CEP; confirme no checkout.
+
+Um 403 da API de busca retorna `MELI_SEARCH_FORBIDDEN` e preserva OAuth/persistência. Não indica senha de banco incorreta. Acesso à busca precisa ser validado com a aplicação e conta reais; não é garantido pelo sucesso do OAuth.
+
+### Próxima etapa: afiliados e WhatsApp
+
+1. Confirmar elegibilidade da conta e os mecanismos oficiais disponíveis para geração de links com comissão. Implementar `AffiliateLinkProvider` com links reais e fonte verificável; não converter um permalink comum em link afiliado por suposição.
+2. Acrescentar autenticação de operador para ações administrativas, destinos aprovados e consentimento de recebimento. A sessão OAuth atual não é uma identidade de administrador global.
+3. Preparar fila persistente de distribuição com status, deduplicação por oferta/destino, idempotência e aprovação de rascunhos. Conectar somente um canal oficial que suporte o destino pretendido, após verificar as capacidades atuais. Não automatizar WhatsApp Web.
+4. Habilitar envio somente depois de testar o link, o cupom e a integração com destinatário de teste explicitamente autorizado. Nenhuma mensagem é enviada nesta etapa.
 
 `lib/offers/contracts.ts` separa MercadoLivreSearchService, PriceHistoryService, OfferScoringService, AffiliateLinkService, AffiliateLinkProvider, CouponService e DistributionProvider. `providers/mercadolivre` e `providers/shopee` registram os limites da etapa atual.
 

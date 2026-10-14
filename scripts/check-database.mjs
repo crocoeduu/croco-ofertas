@@ -13,6 +13,12 @@ try {
   client = new pg.Client(postgresConfig(url));
   await client.connect();
   await client.query('SELECT 1');
+  const connectionCheck = await client.query(`SELECT COUNT(*)::int AS persisted_connections,
+    COUNT(*) FILTER (WHERE session_expires_at>NOW())::int AS active_sessions,
+    COUNT(*) FILTER (WHERE jsonb_typeof(access_token)='object' AND access_token ?& ARRAY['ciphertext','iv','authTag']
+      AND jsonb_typeof(refresh_token)='object' AND refresh_token ?& ARRAY['ciphertext','iv','authTag'])::int AS encrypted_connections
+    FROM public.meli_connections`);
+  console.log(connectionCheck.rows[0]); // Counts only. Never reads/prints ciphertext or tokens.
   await client.query('SELECT 1 FROM public.rate_limit_buckets LIMIT 1');
   await client.query('SELECT owner_hash FROM public.meli_connections LIMIT 0');
   await client.query('SELECT state_hash FROM public.used_oauth_states LIMIT 0');

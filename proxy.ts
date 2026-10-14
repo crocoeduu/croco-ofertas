@@ -4,7 +4,7 @@ export function proxy(request: NextRequest) {
   const dev = process.env.NODE_ENV !== 'production';
   const csp = [
     "default-src 'self'", `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ''}`,
-    `style-src 'self' 'nonce-${nonce}'`, "img-src 'self' data:", "font-src 'self'",
+    `style-src 'self' 'nonce-${nonce}'`, "img-src 'self' data: https://http2.mlstatic.com", "font-src 'self'",
     `connect-src 'self'${dev ? ' ws: wss:' : ''}`, "object-src 'none'", "base-uri 'none'",
     "form-action 'self'", "frame-ancestors 'none'", ...(dev ? [] : ['upgrade-insecure-requests'])
   ].join('; ');
