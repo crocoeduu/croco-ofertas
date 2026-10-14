@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { AppError } from '@/lib/errors';
-import { searchMercadoLivre } from '@/lib/mercadolivre/search';
+import { searchMercadoLivre, searchAccessDiagnostic } from '@/lib/mercadolivre/search';
 import { offerJson, offerError, readOfferBody, requireOfferSession } from '@/lib/offers/security';
 import { listPriceHistories, recordProducts } from '@/lib/offers/repository';
 import { scoreOffer } from '@/lib/offers/scoring';
@@ -20,5 +20,5 @@ export async function POST(request: NextRequest) {
     const [histories,coupons] = await Promise.all([listPriceHistories(owner,result.products.map(product => product.id)),listCoupons(owner)]);
     const now = new Date();
     return offerJson({ ...result,products:result.products.map(product => ({...product,scoring:scoreOffer(product,histories.get(product.id) ?? [],now),coupons:eligibleCoupons(coupons,product,now)})),observedAt:now.toISOString(),affiliateLinksEnabled:false });
-  } catch (error) { return offerError(error); }
+  } catch (error) { return offerError(error,searchAccessDiagnostic(error)); }
 }

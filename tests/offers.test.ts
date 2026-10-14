@@ -33,9 +33,25 @@ describe('normalização e API oficial',()=>{
     const result=await searchMercadoLivre('a'.repeat(64),'fone bluetooth');expect(result.products).toHaveLength(1);expect(JSON.stringify(result)).not.toContain('mock-private-access');
     const [url,options]=fetcher.mock.calls[0];expect(String(url)).toBe('https://api.mercadolibre.com/sites/MLB/search?q=fone+bluetooth&limit=20&offset=0');expect(options).toMatchObject({redirect:'error',cache:'no-store',headers:{Authorization:'Bearer mock-private-access'}});
   });
-  it.each([[403,'MELI_SEARCH_FORBIDDEN'],[401,'CONNECTION_MISSING'],[429,'SEARCH_RATE_LIMITED'],[500,'MELI_API_ERROR']])('erro %s preserva conexão e não repete chamadas',async(status,code)=>{
+  it.each([[401,'CONNECTION_MISSING'],[429,'SEARCH_RATE_LIMITED'],[500,'MELI_API_ERROR']])('erro %s preserva conexão e não repete chamadas',async(status,code)=>{
     const fetcher=vi.fn<typeof fetch>().mockResolvedValue(Response.json({access_token:'mock-should-never-be-exposed'},{status:status as number}));vi.stubGlobal('fetch',fetcher);vi.spyOn(console,'warn').mockImplementation(()=>undefined);
     await expect(searchMercadoLivre('a'.repeat(64),'fone')).rejects.toMatchObject({code});expect(fetcher).toHaveBeenCalledTimes(1);expect(mock.token).toHaveBeenCalledTimes(1);
+  });
+  it('usa catálogo oficial quando a busca de anúncios é negada',async()=>{
+    const fetcher=vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({blocked_by:'PolicyAgent'},{status:403}))
+      .mockResolvedValueOnce(Response.json({paging:{total:1},results:[{id:'MLB987654321'}]}))
+      .mockResolvedValueOnce(Response.json({id:'MLB987654321',status:'active',name:'Fone catálogo',permalink:'https://www.mercadolivre.com.br/p/MLB987654321',pictures:[{url:'https://http2.mlstatic.com/D_123.jpg'}],buy_box_winner:{item_id:raw.id,price:80,currency_id:'BRL',condition:'new',shipping:{free_shipping:true}}}));
+    vi.stubGlobal('fetch',fetcher);vi.spyOn(console,'warn').mockImplementation(()=>undefined);
+    const result=await searchMercadoLivre('a'.repeat(64),'fone');expect(result.source).toBe('catalog');expect(result.products[0]).toMatchObject({id:raw.id,price:80,catalogId:'MLB987654321'});expect(String(fetcher.mock.calls[1][0])).toContain('/products/search?site_id=MLB&status=active');expect(String(fetcher.mock.calls[2][0])).toBe('https://api.mercadolibre.com/products/MLB987654321');
+  });
+  it('negação nas duas buscas retorna somente código de política, sem payload privado',async()=>{
+    const fetcher=vi.fn<typeof fetch>().mockImplementation(async()=>Response.json({blocked_by:'PolicyAgent',message:'mock-private-policy-detail'},{status:403}));vi.stubGlobal('fetch',fetcher);const logger=vi.spyOn(console,'warn').mockImplementation(()=>undefined);
+    await expect(searchMercadoLivre('a'.repeat(64),'fone')).rejects.toMatchObject({code:'MELI_SEARCH_FORBIDDEN',resource:'catalog_search',reason:'POLICY_DENIED'});expect(fetcher).toHaveBeenCalledTimes(2);expect(JSON.stringify(logger.mock.calls)).not.toContain('mock-private-policy-detail');
+  });
+  it('catálogo sem oferta vencedora nunca inventa preço',async()=>{
+    const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({},{status:403})).mockResolvedValueOnce(Response.json({paging:{total:1},results:[{id:'MLB987654321'}]})).mockResolvedValueOnce(Response.json({id:'MLB987654321',status:'active',name:'Sem oferta',buy_box_winner:null}));vi.stubGlobal('fetch',fetcher);vi.spyOn(console,'warn').mockImplementation(()=>undefined);
+    expect((await searchMercadoLivre('a'.repeat(64),'fone')).products).toEqual([]);
   });
   it('query e paginação inválidas não acessam token ou rede',async()=>{expect(()=>searchQuery('a')).toThrow();expect(()=>searchQuery('a'.repeat(101))).toThrow();expect(()=>searchQuery('fone\u0000')).toThrow();await expect(searchMercadoLivre('a'.repeat(64),'fone',1)).rejects.toMatchObject({code:'SEARCH_INVALID'});expect(mock.token).not.toHaveBeenCalled();});
 });

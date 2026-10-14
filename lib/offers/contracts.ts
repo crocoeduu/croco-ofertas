@@ -4,6 +4,7 @@ export interface Product {
   previousPrice?: number; soldQuantity?: number; reputation?: string;
   shipping?: { free?: boolean; cost?: number }; imageUrl?: string; permalink: string; category?: string;
   condition?: 'new' | 'used' | 'not_specified';
+  catalogId?: string;
 }
 export interface PriceObservation { productId: string; provider: ProviderId; price: number; currency: string; observedAt: Date; condition?: Product['condition'] }
 export interface MercadoLivreSearchService { search(query: string): Promise<Product[]> }

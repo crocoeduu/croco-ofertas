@@ -4,8 +4,55 @@ import type { Product } from '../offers/contracts';
 import { marketUrl, priceCents, productId, searchQuery } from '../offers/validation';
 import { getValidAccessToken } from './tokens';
 
-export interface SearchResult { products: Product[]; total: number; offset: number; limit: number }
+export interface SearchResult { products: Product[]; total: number; offset: number; limit: number; source?: 'marketplace' | 'catalog' }
+type SearchResource = 'marketplace' | 'catalog_search' | 'catalog_product';
+type AccessReason = 'POLICY_DENIED' | 'FORBIDDEN';
+export class SearchAccessError extends AppError {
+  constructor(readonly resource: SearchResource, readonly reason: AccessReason) { super('MELI_SEARCH_FORBIDDEN'); }
+}
+export function searchAccessDiagnostic(error: unknown) {
+  return error instanceof SearchAccessError ? { resource:error.resource,reason:error.reason } : undefined;
+}
 function record(value: unknown): Record<string, unknown> | undefined { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }
+async function apiJson(url: URL, token: string, resource: SearchResource, signal: AbortSignal) {
+  const response = await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'},cache:'no-store',redirect:'error',signal});
+  if(response.status===403) {
+    let reason:AccessReason='FORBIDDEN';
+    // Never log the provider's message/payload: only a known policy marker.
+    try { const body=record(await response.json()); if(body?.blocked_by==='PolicyAgent'||body?.code==='PA_UNAUTHORIZED_RESULT_FROM_POLICIES')reason='POLICY_DENIED'; } catch { /* A generic 403 is still denied. */ }
+    console.warn('MELI_SEARCH_FORBIDDEN',{resource,reason});
+    throw new SearchAccessError(resource,reason);
+  }
+  if(response.status===401)throw new AppError('CONNECTION_MISSING');
+  if(response.status===429)throw new AppError('SEARCH_RATE_LIMITED');
+  if(!response.ok||!/^application\/json(?:;|$)/i.test(response.headers.get('content-type')??''))throw new AppError('MELI_API_ERROR');
+  const data=record(await response.json());if(!data)throw new AppError('MELI_API_ERROR');return data;
+}
+async function searchCatalog(token:string,q:string,offset:number,signal:AbortSignal):Promise<SearchResult> {
+  const url=new URL('https://api.mercadolibre.com/products/search');
+  url.search=new URLSearchParams({site_id:'MLB',status:'active',q,limit:'20',offset:String(offset)}).toString();
+  const data=await apiJson(url,token,'catalog_search',signal);const paging=record(data.paging);
+  if(!Array.isArray(data.results)||data.results.length>20||!paging||!Number.isSafeInteger(paging.total)||(paging.total as number)<0)throw new AppError('MELI_API_ERROR');
+  const ids=data.results.map(value=>record(value)?.id).filter((id):id is string=>typeof id==='string'&&/^MLB[0-9]{6,18}$/.test(id));
+  const unique=new Map<string,Product>(); let denied:SearchAccessError|undefined;
+  // Consult only documented catalogue resources, once per product, four at a time.
+  for(let index=0;index<ids.length;index+=4) {
+    const details=await Promise.all(ids.slice(index,index+4).map(async id=>{
+      try {return await apiJson(new URL(`https://api.mercadolibre.com/products/${id}`),token,'catalog_product',signal);}
+      catch(error){if(error instanceof SearchAccessError){denied=error;return null;}throw error;}
+    }));
+    for(const detail of details) {
+      if(!detail||detail.status!=='active')continue;
+      const winner=record(detail.buy_box_winner);if(!winner)continue; // Never fabricate prices from a catalogue title.
+      const picture=Array.isArray(detail.pictures)?record(detail.pictures[0]):undefined;
+      const product=normalizeProduct({...winner,id:winner.item_id,title:detail.name,permalink:detail.permalink,secure_thumbnail:picture?.url});
+      if(product){product.catalogId=productId(detail.id);unique.set(product.id,product);}
+    }
+  }
+  if(!unique.size&&denied)throw denied;
+  if(data.results.length&&!ids.length)throw new AppError('MELI_API_ERROR');
+  return {products:[...unique.values()],total:paging.total as number,offset,limit:20,source:'catalog'};
+}
 export function normalizeProduct(value: unknown): Product | null {
   const item = record(value); if (!item) return null;
   try {
@@ -27,17 +74,16 @@ export async function searchMercadoLivre(ownerHash: string, query: string, offse
   const token = await getValidAccessToken(ownerHash);
   const url = new URL('https://api.mercadolibre.com/sites/MLB/search');
   url.search = new URLSearchParams({ q, limit: '20', offset: String(offset) }).toString();
+  const signal=AbortSignal.timeout(20_000);
   try {
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(10_000) });
-    if (response.status === 403) { console.warn('MELI_SEARCH_FORBIDDEN'); throw new AppError('MELI_SEARCH_FORBIDDEN'); }
-    if (response.status === 401) throw new AppError('CONNECTION_MISSING');
-    if (response.status === 429) throw new AppError('SEARCH_RATE_LIMITED');
-    if (!response.ok || !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') ?? '')) throw new AppError('MELI_API_ERROR');
-    const data = record(await response.json()); const paging = record(data?.paging);
+    let data:Record<string,unknown>;
+    try{data=await apiJson(url,token,'marketplace',signal);}
+    catch(error){if(error instanceof SearchAccessError)return await searchCatalog(token,q,offset,signal);throw error;}
+    const paging = record(data?.paging);
     if (!data || !Array.isArray(data.results) || data.results.length > 20 || !paging || !Number.isSafeInteger(paging.total) || (paging.total as number) < 0) throw new AppError('MELI_API_ERROR');
     const unique = new Map<string, Product>();
     for (const value of data.results) { const product = normalizeProduct(value); if (product) unique.set(product.id, product); }
     if (data.results.length && !unique.size) throw new AppError('MELI_API_ERROR');
-    return { products: [...unique.values()], total: paging.total as number, offset, limit: 20 };
+    return { products: [...unique.values()], total: paging.total as number, offset, limit: 20,source:'marketplace' };
   } catch (error) { if (error instanceof AppError) throw error; throw new AppError('NETWORK_ERROR'); }
 }

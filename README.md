@@ -167,6 +167,8 @@ O histórico pertence à sessão atual; uma reconexão cria outra sessão e não
 
 Um 403 da API de busca retorna `MELI_SEARCH_FORBIDDEN` e preserva OAuth/persistência. Não indica senha de banco incorreta. Acesso à busca precisa ser validado com a aplicação e conta reais; não é garantido pelo sucesso do OAuth.
 
+Após a primeira negação da busca de anúncios, há uma consulta ao recurso oficial de catálogo documentado em `providers/mercadolivre/README.md`. São usados apenas os preços reais do anúncio vencedor (`buy_box_winner`) em BRL. Se o catálogo também negar acesso, a aplicação para com um diagnóstico sanitizado de política. A consulta tem deadline de 20 segundos e detalhes do catálogo são carregados em lotes de quatro, sem retries ou mudanças de permissão.
+
 ### Próxima etapa: afiliados e WhatsApp
 
 1. Confirmar elegibilidade da conta e os mecanismos oficiais disponíveis para geração de links com comissão. Implementar `AffiliateLinkProvider` com links reais e fonte verificável; não converter um permalink comum em link afiliado por suposição.

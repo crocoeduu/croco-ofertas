@@ -2,4 +2,8 @@ OAuth, cliente privado e busca estão em `lib/mercadolivre`. A busca usa o endpo
 
 Referência: https://developers.mercadolivre.com.br/pt_br/itens-e-buscas
 
+Quando a busca de anúncios retorna 403, consulta-se o buscador oficial de catálogo `/products/search?site_id=MLB&status=active&q=...` e os detalhes `/products/{id}`. Somente `buy_box_winner` com preço BRL e ID de anúncio válido é registrado. O histórico continua sendo do anúncio vencedor, não do agregado do catálogo. O link é o permalink oficial do produto de catálogo; confirme a oferta/preço escolhido no checkout. Não há inferência de preço a partir de títulos, ranges, Google ou páginas HTML. Referência: https://developers.mercadolivre.com.br/buscador-de-produtos
+
+Se também houver 403 no catálogo, a consulta termina com diagnóstico allowlisted (`POLICY_DENIED`/`FORBIDDEN` e nome fixo do recurso). A aplicação não eleva escopos, tenta outros tokens ou contorna a política do provedor. 401, 429 e falhas de rede não disparam fallback.
+
 Busca e link afiliado são integrações separadas. O OAuth de vendedor/conta não comprova participação no programa de afiliados. `AffiliateLinkProvider` e `DistributionProvider` continuam como contratos para a próxima etapa; nenhum link de comissão é inventado e nenhum WhatsApp é enviado.

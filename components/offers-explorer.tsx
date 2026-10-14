@@ -13,7 +13,7 @@ const date = (value: string) => new Date(value).toLocaleString('pt-BR');
 async function api<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(url,{method:body === undefined ? 'GET' : 'POST',headers:body === undefined ? undefined : {'Content-Type':'application/json'},body:body === undefined ? undefined : JSON.stringify(body),cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(30_000)});
   const data = await response.json();
-  if (!response.ok) throw new Error(typeof data.error?.message === 'string' ? data.error.message : 'Não foi possível concluir a consulta.');
+  if (!response.ok) throw new Error((typeof data.error?.message === 'string' ? data.error.message : 'Não foi possível concluir a consulta.')+(data.error?.diagnostic?.reason==='POLICY_DENIED'?' Restrição de política do Mercado Livre.':''));
   return data as T;
 }
 export function OffersExplorer({connected}:{connected:boolean}) {
@@ -38,7 +38,7 @@ export function OffersExplorer({connected}:{connected:boolean}) {
     {!connected && <div className="notice">Conecte o Mercado Livre para buscar produtos e guardar o histórico. <a href="/api/mercadolivre/login">Conectar Mercado Livre →</a></div>}
     <p className="offer-help">O histórico começa na primeira consulta, com no máximo uma coleta por hora para cada anúncio. O score exige três dias anteriores com dados para avaliar queda de preço. Preço e frete devem ser confirmados no Mercado Livre.</p>
     {error && <div className="notice" role="alert">{error}</div>}
-    <div aria-live="polite" aria-atomic="true">{results && <p className="results-note">{results.products.length} produtos nesta página · busca por “{searched}” · coleta em {date(results.observedAt)}</p>}</div>
+    <div aria-live="polite" aria-atomic="true">{results && <p className="results-note">{results.products.length} produtos nesta página{results.source==='catalog'?' · catálogo do Mercado Livre':''} · busca por “{searched}” · coleta em {date(results.observedAt)}</p>}</div>
     {results?.products.length === 0 && <p>Nenhum produto disponível nesta busca.</p>}
     <div className="products-grid">{results?.products.map(product=><article className="product-card" key={product.id}>
       <div className="product-image">{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" width="160" height="160" referrerPolicy="no-referrer"/> : <span>Sem imagem</span>}</div>
@@ -47,7 +47,7 @@ export function OffersExplorer({connected}:{connected:boolean}) {
       <span className="score-badge">Score {product.scoring.score}/100 · {product.scoring.sufficientHistory?'Com histórico':'Provisório'}</span>
       <ul className="score-reasons">{product.scoring.reasons.map(reason=><li key={reason}>{reason}</li>)}</ul>
       {product.coupons.length>0 && <p className="coupon-note">Cupons cadastrados: {product.coupons.map(c=>`${c.code} (${c.verified?'verificado':'não verificado'})`).join(', ')}. Condições e aplicação precisam ser confirmadas.</p>}
-      <a className="product-link" href={product.permalink} target="_blank" rel="noopener noreferrer">Ver no Mercado Livre ↗</a>
+      <a className="product-link" href={product.permalink} target="_blank" rel="noopener noreferrer">{product.catalogId?'Ver produto no Mercado Livre':'Ver no Mercado Livre'} ↗</a>
       <details onToggle={event=>{if(event.currentTarget.open)void loadHistory(product.id);}}><summary>Histórico de preços · 30 dias</summary>
         {historyErrors[product.id]?<p role="alert">{historyErrors[product.id]}</p>:!histories[product.id]?<p>Carregando…</p>:<div className="history-scroll"><table><caption>Preços observados deste anúncio</caption><thead><tr><th>Data</th><th>Preço</th></tr></thead><tbody>{histories[product.id].map(entry=><tr key={entry.observedAt}><td>{date(entry.observedAt)}</td><td>{money(entry.price)}</td></tr>)}</tbody></table></div>}
       </details>

@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { AppError } from '@/lib/errors';
 const mock=vi.hoisted(()=>({session:vi.fn(),search:vi.fn(),record:vi.fn(),histories:vi.fn(),exists:vi.fn(),coupons:vi.fn(),save:vi.fn()}));
 vi.mock('@/lib/offers/security',async original=>({...await original<typeof import('@/lib/offers/security')>(),requireOfferSession:mock.session}));
-vi.mock('@/lib/mercadolivre/search',()=>({searchMercadoLivre:mock.search}));
+vi.mock('@/lib/mercadolivre/search',()=>({searchMercadoLivre:mock.search,searchAccessDiagnostic:()=>undefined}));
 vi.mock('@/lib/offers/repository',()=>({recordProducts:mock.record,listPriceHistories:mock.histories,productExists:mock.exists}));
 vi.mock('@/lib/offers/coupons',async original=>({...await original<typeof import('@/lib/offers/coupons')>(),listCoupons:mock.coupons,saveCoupon:mock.save}));
 import { POST as search } from '@/app/api/mercadolivre/search/route';
