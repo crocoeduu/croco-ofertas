@@ -16,6 +16,7 @@ export function searchAccessDiagnostic(error: unknown) {
 function record(value: unknown): Record<string, unknown> | undefined { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }
 async function apiJson(url: URL, token: string, resource: SearchResource, signal: AbortSignal) {
   const response = await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'},cache:'no-store',redirect:'error',signal});
+  if(!response.ok)console.warn('MELI_API_FAILED',{resource,status:response.status});
   if(response.status===403) {
     let reason:AccessReason='FORBIDDEN';
     // Never log the provider's message/payload: only a known policy marker.
@@ -26,7 +27,14 @@ async function apiJson(url: URL, token: string, resource: SearchResource, signal
   if(response.status===401)throw new AppError('CONNECTION_MISSING');
   if(response.status===429)throw new AppError('SEARCH_RATE_LIMITED');
   if(!response.ok||!/^application\/json(?:;|$)/i.test(response.headers.get('content-type')??''))throw new AppError('MELI_API_ERROR');
-  const data=record(await response.json());if(!data)throw new AppError('MELI_API_ERROR');return data;
+  const raw:unknown=await response.json();
+  const data=record(raw);
+  if(resource==='catalog_offers') {
+    console.info('MELI_OFFERS_RESPONSE_SHAPE',{rootArray:Array.isArray(raw),resultsArray:Array.isArray(data?.results),itemsArray:Array.isArray(data?.items)});
+    if(Array.isArray(raw))return {results:raw};
+    if(data&&!Array.isArray(data.results)&&Array.isArray(data.items))return {...data,results:data.items};
+  }
+  if(!data)throw new AppError('MELI_API_ERROR');return data;
 }
 async function searchCatalog(token:string,q:string,offset:number,signal:AbortSignal):Promise<SearchResult> {
   const url=new URL('https://api.mercadolibre.com/products/search');
@@ -57,7 +65,7 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
   for(const detail of withoutWinner) {
     if(unique.size>=20)break;
     const id=productId(detail.id);
-    const url=new URL(`https://api.mercadolibre.com/products/${id}/items`);url.searchParams.set('limit','5');
+    const url=new URL(`https://api.mercadolibre.com/products/${id}/items`);
     const offers=await apiJson(url,token,'catalog_offers',signal);
     if(!Array.isArray(offers.results)||offers.results.length>100)throw new AppError('MELI_API_ERROR');
     console.info('MELI_CATALOG_OFFERS_RESULT',{
