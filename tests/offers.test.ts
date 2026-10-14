@@ -51,7 +51,7 @@ describe('normalização e API oficial',()=>{
   });
   it('catálogo sem oferta vencedora nunca inventa preço',async()=>{
     const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({},{status:403})).mockResolvedValueOnce(Response.json({paging:{total:1},results:[{id:'MLB987654321'}]})).mockResolvedValueOnce(Response.json({id:'MLB987654321',status:'active',name:'Sem oferta',buy_box_winner:null}));vi.stubGlobal('fetch',fetcher);vi.spyOn(console,'warn').mockImplementation(()=>undefined);
-    expect((await searchMercadoLivre('a'.repeat(64),'fone')).products).toEqual([]);
+    const result=await searchMercadoLivre('a'.repeat(64),'fone');expect(result.products).toEqual([]);expect(result.priceCoverage).toEqual({matches:1,active:1,winners:0,priced:0});
   });
   it('query e paginação inválidas não acessam token ou rede',async()=>{expect(()=>searchQuery('a')).toThrow();expect(()=>searchQuery('a'.repeat(101))).toThrow();expect(()=>searchQuery('fone\u0000')).toThrow();await expect(searchMercadoLivre('a'.repeat(64),'fone',1)).rejects.toMatchObject({code:'SEARCH_INVALID'});expect(mock.token).not.toHaveBeenCalled();});
 });

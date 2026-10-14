@@ -4,7 +4,7 @@ import type { Product } from '../offers/contracts';
 import { marketUrl, priceCents, productId, searchQuery } from '../offers/validation';
 import { getValidAccessToken } from './tokens';
 
-export interface SearchResult { products: Product[]; total: number; offset: number; limit: number; source?: 'marketplace' | 'catalog' }
+export interface SearchResult { products: Product[]; total: number; offset: number; limit: number; source?: 'marketplace' | 'catalog'; priceCoverage?: {matches:number;active:number;winners:number;priced:number} }
 type SearchResource = 'marketplace' | 'catalog_search' | 'catalog_product';
 type AccessReason = 'POLICY_DENIED' | 'FORBIDDEN';
 export class SearchAccessError extends AppError {
@@ -35,6 +35,7 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
   if(!Array.isArray(data.results)||data.results.length>20||!paging||!Number.isSafeInteger(paging.total)||(paging.total as number)<0)throw new AppError('MELI_API_ERROR');
   const ids=data.results.map(value=>record(value)?.id).filter((id):id is string=>typeof id==='string'&&/^MLB[0-9]{6,18}$/.test(id));
   const unique=new Map<string,Product>(); let denied:SearchAccessError|undefined;
+  let active=0;let winners=0;
   // Consult only documented catalogue resources, once per product, four at a time.
   for(let index=0;index<ids.length;index+=4) {
     const details=await Promise.all(ids.slice(index,index+4).map(async id=>{
@@ -43,7 +44,9 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
     }));
     for(const detail of details) {
       if(!detail||detail.status!=='active')continue;
+      active++;
       const winner=record(detail.buy_box_winner);if(!winner)continue; // Never fabricate prices from a catalogue title.
+      winners++;
       const picture=Array.isArray(detail.pictures)?record(detail.pictures[0]):undefined;
       const product=normalizeProduct({...winner,id:winner.item_id,title:detail.name,permalink:detail.permalink,secure_thumbnail:picture?.url});
       if(product){product.catalogId=productId(detail.id);unique.set(product.id,product);}
@@ -51,7 +54,9 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
   }
   if(!unique.size&&denied)throw denied;
   if(data.results.length&&!ids.length)throw new AppError('MELI_API_ERROR');
-  return {products:[...unique.values()],total:paging.total as number,offset,limit:20,source:'catalog'};
+  const priceCoverage={matches:data.results.length,active,winners,priced:unique.size};
+  console.info('MELI_CATALOG_RESULT',{total:paging.total,...priceCoverage}); // Counts only, no query/account/payload/token.
+  return {products:[...unique.values()],total:paging.total as number,offset,limit:20,source:'catalog',priceCoverage};
 }
 export function normalizeProduct(value: unknown): Product | null {
   const item = record(value); if (!item) return null;

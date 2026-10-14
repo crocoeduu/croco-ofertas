@@ -39,7 +39,7 @@ export function OffersExplorer({connected}:{connected:boolean}) {
     <p className="offer-help">O histórico começa na primeira consulta, com no máximo uma coleta por hora para cada anúncio. O score exige três dias anteriores com dados para avaliar queda de preço. Preço e frete devem ser confirmados no Mercado Livre.</p>
     {error && <div className="notice" role="alert">{error}</div>}
     <div aria-live="polite" aria-atomic="true">{results && <p className="results-note">{results.products.length} produtos nesta página{results.source==='catalog'?' · catálogo do Mercado Livre':''} · busca por “{searched}” · coleta em {date(results.observedAt)}</p>}</div>
-    {results?.products.length === 0 && <p>Nenhum produto disponível nesta busca.</p>}
+    {results?.products.length === 0 && <p role="status">{results.priceCoverage && results.priceCoverage.matches>0 ? `O catálogo retornou ${results.priceCoverage.matches} produtos nesta página, mas não disponibilizou anúncios com preço válido. A coleta de preços aguarda dados disponíveis na API.` : 'Nenhum produto encontrado nesta busca. Tente uma marca ou modelo, por exemplo JBL.'}</p>}
     <div className="products-grid">{results?.products.map(product=><article className="product-card" key={product.id}>
       <div className="product-image">{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" width="160" height="160" referrerPolicy="no-referrer"/> : <span>Sem imagem</span>}</div>
       <span className="product-condition">{product.condition==='new'?'Novo':product.condition==='used'?'Usado':'Condição não informada'} · {product.id}</span>
