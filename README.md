@@ -167,7 +167,7 @@ O histórico pertence à sessão atual; uma reconexão cria outra sessão e não
 
 Um 403 da API de busca retorna `MELI_SEARCH_FORBIDDEN` e preserva OAuth/persistência. Não indica senha de banco incorreta. Acesso à busca precisa ser validado com a aplicação e conta reais; não é garantido pelo sucesso do OAuth.
 
-Após a primeira negação da busca de anúncios, há uma consulta ao recurso oficial de catálogo documentado em `providers/mercadolivre/README.md`. São usados apenas os preços reais do anúncio vencedor (`buy_box_winner`) em BRL. Se o catálogo também negar acesso, a aplicação para com um diagnóstico sanitizado de política. A consulta tem deadline de 20 segundos e detalhes do catálogo são carregados em lotes de quatro, sem retries ou mudanças de permissão.
+Após a primeira negação da busca de anúncios, há uma consulta ao catálogo documentado em `providers/mercadolivre/README.md`. São usados preços reais em BRL do anúncio vencedor (`buy_box_winner`), quando disponível, ou dos anúncios associados. Um 404 individual é ignorado; acesso negado a um recurso de preços encerra a consulta. O link de catálogo vem da API ou é construído no domínio oficial a partir de um product ID validado. A consulta tem deadline de 20 segundos e detalhes do catálogo são carregados em lotes de quatro, sem retries ou mudanças de permissão.
 
 ### Próxima etapa: afiliados e WhatsApp
 

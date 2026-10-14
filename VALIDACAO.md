@@ -1,41 +1,30 @@
-# Validação da entrega
+# Validação — 14 de outubro de 2026
 
-Validação executada no Windows com Node.js 24.20.0 e npm 12.0.2. Dependências estáveis confirmadas no registro npm: Next.js 16.4.0 e React 19.3.0.
+Projeto usado: `crocoeduu/croco-ofertas`, branch `main`, Vercel `croco-ofertas`, Supabase `croco-ofertas`. Domínio de testes OAuth e aplicação: https://croco-ofertas.vercel.app. Nenhum segredo está neste registro.
 
-| Verificação | Resultado |
-| --- | --- |
-| npm install | Concluído; lockfile incluído |
-| npm run lint | Aprovado, sem ignorar erros |
-| npm run typecheck | Aprovado |
-| npm test | 53 testes aprovados em cinco arquivos |
-| npm run security:check | Aprovado |
-| npm run build | Concluído; página e três APIs compiladas, proxy CSP incluída |
-| npm run test:smoke | Aprovado contra o servidor compilado em produção local |
-| npm audit | Zero vulnerabilidades |
-| git check-ignore | Todos os ambientes privados, .vercel, .next e node_modules ignorados |
-| Browser desktop/mobile | Interface renderizada, sem overflow horizontal em mobile e sem erros no console |
+## Evidência real em produção
 
-Os testes cobrem state, PKCE, vetor SHA-256 da RFC 7636, URI exata nos dois passos, ambientes inválidos, callback sem code/state/verifier, consentimento negado, respostas externas inválidas, timeout sem retry, erros sanitizados, nonce/criptografia autenticada, armazenamento parametrizado, refresh rotacionado sob trava, replay persistente e rate limit. A API do Mercado Livre é simulada nos testes.
+- Supabase SQL Editor: três registros em `public.meli_connections`, três sessões ativas e três pares de access/refresh tokens em envelopes criptografados (`ciphertext`, `iv`, `authTag`). A chave AES não foi alterada.
+- O usuário concluiu OAuth e confirmou **Conectado** no frontend. O código só mostra esse status após consultar a sessão no banco.
+- Login: HTTP 302 para `auth.mercadolivre.com.br`, callback exata e PKCE S256. Runtime Logs confirmam `DB_READY` depois de `SELECT 1` e validação das tabelas.
+- Migração aplicada em schema privado `offers`: `products`, `price_observations`, `coupons`; RLS ativo e sem leitura por `anon`/`authenticated`. Data API permanece desligado, banco acessado por `pg` com TLS verificado.
+- Busca de anúncios `/sites/MLB/search`: 403 real para esta aplicação/conta. O catálogo respondeu com produtos ativos, mas sem `buy_box_winner`.
+- Recurso `/products/{id}/items`: devolveu anúncios com preço numérico, moeda BRL e ID válido. Um 404 individual inicialmente abortava a página; tratamento corrigido para preservar os outros produtos e construir permalink de catálogo quando ausente.
+- O usuário repetiu busca de JBL e confirmou **Produtos com preços / tudo funcionando**.
+- Consulta real posterior: **20 produtos**, **20 observações**, todas com BRL e preço positivo, **zero duplicações na mesma hora**; três conexões e sessões preservadas. Última coleta verificada: `2026-10-14 22:28:01.593098+00`.
+- Inserts em lote, deduplicação horária e cupom manual não verificado foram testados em transação com rollback no banco real. Dados artificiais desse teste não ficaram persistidos.
+- Página inicial, Radar e health: HTTP 200. APIs privadas sem sessão: HTTP 401 e no-store. Callback sem parâmetros: HTTP 400.
 
-O smoke injeta sentinelas aleatórias somente no processo do servidor e verifica ausência no HTML, JS e respostas de erro. Também verifica CSP com nonce, HTTP 400 da callback sem parâmetros, redirect exclusivo ao host oficial quando há configuração de teste, cookies seguros e HTTP 404 em endpoints de debug/admin/arquivos de ambiente.
+## Checks
 
-## Publicação e testes públicos
+`npm ci`, lint, typecheck, **116 testes em 10 arquivos**, security check, build, smoke de produção local e `npm audit --audit-level=high` passaram. Audit: zero vulnerabilidades. CI GitHub do código funcional `08c9bfcfa8669160b96faeef1ab1a3fa79ad9964`: success.
 
-Repositório público: [crocoeduu/croco-ofertas](https://github.com/crocoeduu/croco-ofertas), branch `main`. O [CI principal no GitHub Actions](https://github.com/crocoeduu/croco-ofertas/actions/runs/38504653069) concluiu com sucesso após a publicação do código. Dependabot está ativo; PRs automáticos de atualização não foram mesclados.
+Os testes automatizados de Mercado Livre usam fixtures. A confirmação externa descrita acima foi feita separadamente pela sessão real do usuário, Runtime Logs e banco real. Nenhuma credencial ou token foi publicado.
 
-Projeto Vercel: `croco-ofertas`, Node.js 24.x, conta `eduardolu3s-projects`. O deploy de produção foi criado a partir do código do GitHub e chegou ao estado **READY**. O escopo padrão da conta autenticada permitiu a publicação no mesmo projeto/conta verificados.
+## Limites desta etapa
 
-Domínio estável real confirmado pela API da Vercel e por requisições públicas: **croco-ofertas.vercel.app**.
-
-| URL | Verificação pública |
-| --- | --- |
-| https://croco-ofertas.vercel.app/ | HTTP 200, interface da Central de Ofertas |
-| https://croco-ofertas.vercel.app/api/health | HTTP 200, exatamente `{"status":"ok"}` |
-| https://croco-ofertas.vercel.app/api/mercadolivre/callback | HTTP 400 sem parâmetros, mensagem amigável, no-store |
-| https://croco-ofertas.vercel.app/api/mercadolivre/login | HTTP 503 amigável enquanto faltam Client ID/Secret, no-store |
-
-Callback exata para cadastrar no Mercado Livre: **https://croco-ofertas.vercel.app/api/mercadolivre/callback**. O valor já foi configurado como `MELI_REDIRECT_URI` no ambiente Production da Vercel.
-
-Ainda é necessário configurar na Vercel: `MELI_CLIENT_ID` e `MELI_CLIENT_SECRET`, e fazer novo deploy. Banco opcional: `DATABASE_URL` e `TOKEN_ENCRYPTION_KEY`, sempre em conjunto, e migração do esquema. Não foram colocadas credenciais fictícias na produção.
-
-Não foram realizadas autorização real do Mercado Livre, persistência em PostgreSQL real nem rotação real de tokens, porque não foram fornecidos/configurados esses serviços e credenciais. Os adapters de banco e refresh foram testados com mocks. Sem banco, o cooldown de login pode ser contornado apagando cookies e não existe trava distribuída de callback; veja limites e configuração no README.
+- Histórico começa nas consultas reais, até uma amostra por hora/anúncio/sessão. Coleta automática agendada ainda não está habilitada.
+- Score inicial é provisório; comparação histórica exige três dias anteriores com coletas comparáveis. Algoritmo e exclusão de dias repetidos foram testados; não foi fabricado histórico retroativo.
+- Cupons manuais têm código, validade e condições, ficam não verificados e não alteram preços/score. O teste transacional não comprova a aplicação de um cupom no checkout externo.
+- Links atuais são do produto/anúncio, sem promessa de comissão. `AffiliateLinkProvider` e `DistributionProvider` são contratos para as próximas integrações; nenhum envio ao WhatsApp foi habilitado.
+- A geração oficial de links afiliados depende do acesso ao programa. Distribuição depende de canal, destinatários aprovados e capacidades oficiais do provedor, sem automatizar WhatsApp Web.
