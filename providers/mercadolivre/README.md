@@ -1,0 +1,1 @@
+OAuth e cliente privado estão em `lib/mercadolivre`. Busca futura deve implementar os contratos em `lib/offers` somente depois de confirmar endpoints, escopos e permissões disponíveis. Busca e link afiliado são integrações separadas.

@@ -1,0 +1,1 @@
+Integração futura, sem API simulada. Implementar apenas após obter credenciais, documentação e permissões oficiais. A distribuição de ofertas usa `DistributionProvider`, sem automação do WhatsApp Web.

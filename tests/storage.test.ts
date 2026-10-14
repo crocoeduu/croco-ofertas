@@ -1,0 +1,18 @@
+import { beforeEach, afterEach, it, expect, vi } from 'vitest';
+import { randomBytes } from 'node:crypto';
+import { encrypt } from '@/lib/crypto';
+import { tokenFixture } from './fixtures';
+const db = vi.hoisted(()=>({query:vi.fn()}));
+vi.mock('@/lib/database',()=>({getDatabase:()=>db,transaction:async (work:(client:typeof db)=>Promise<unknown>)=>work(db)}));
+vi.mock('@/lib/mercadolivre/oauth',()=>({refreshMercadoLivreToken:vi.fn()}));
+import { refreshMercadoLivreToken } from '@/lib/mercadolivre/oauth';
+import { getValidAccessToken, saveMercadoLivreTokens } from '@/lib/mercadolivre/tokens';
+import { consumeOAuthState, PostgresRateLimit } from '@/lib/rate-limit';
+const owner='1'.repeat(64); const key=randomBytes(32);
+beforeEach(()=>{vi.stubEnv('DATABASE_URL','postgres://localhost/db');vi.stubEnv('TOKEN_ENCRYPTION_KEY',key.toString('hex'));vi.stubEnv('NODE_ENV','test');vi.stubEnv('MELI_CLIENT_ID','123456');vi.stubEnv('MELI_CLIENT_SECRET','unit-secret-placeholder');vi.stubEnv('MELI_REDIRECT_URI','https://example.com/api/mercadolivre/callback');db.query.mockReset();});
+afterEach(()=>vi.unstubAllEnvs());
+it('salva os dois tokens criptografados em query parametrizada',async()=>{db.query.mockResolvedValue({rowCount:1,rows:[]});await saveMercadoLivreTokens(owner,tokenFixture);const [sql,values]=db.query.mock.calls[0];expect(sql).toContain('VALUES ($1,$2,$3,$4,$5,$6');expect(JSON.stringify(values)).not.toContain(tokenFixture.access_token);expect(JSON.stringify(values)).not.toContain(tokenFixture.refresh_token);expect(values[2]).toHaveProperty('authTag');expect(values[3]).toHaveProperty('iv');});
+it('refresh serializado usa FOR UPDATE e substitui token rotacionado',async()=>{db.query.mockResolvedValueOnce({rows:[{owner_hash:owner,user_id:'12345',access_token:encrypt('mock-old-access',key,`${owner}:access`),refresh_token:encrypt('mock-old-refresh',key,`${owner}:refresh`),expires_at:new Date(0),scope:'read'}]}).mockResolvedValueOnce({rowCount:1,rows:[]});vi.mocked(refreshMercadoLivreToken).mockResolvedValue({...tokenFixture,refresh_token:'mock-rotated-refresh'});expect(await getValidAccessToken(owner)).toBe(tokenFixture.access_token);expect(db.query.mock.calls[0][0]).toContain('FOR UPDATE');expect(refreshMercadoLivreToken).toHaveBeenCalledWith(expect.any(Object),'mock-old-refresh');expect(db.query.mock.calls[1][0]).toContain('refresh_token=EXCLUDED.refresh_token');expect(JSON.stringify(db.query.mock.calls[1][1])).not.toContain('mock-rotated-refresh');});
+it('rejeita replay atomicamente antes de nova troca',async()=>{db.query.mockResolvedValue({rowCount:0,rows:[]});await expect(consumeOAuthState('mock-state')).rejects.toThrow('INVALID_STATE');expect(db.query.mock.calls[0][0]).toContain('ON CONFLICT DO NOTHING');});
+it('rate limit usa incremento persistente e limite real',async()=>{db.query.mockResolvedValueOnce({rows:[{hits:10}]}).mockResolvedValueOnce({rows:[{hits:11}]});const limiter=new PostgresRateLimit();expect(await limiter.consume(owner,10,60)).toBe(true);expect(await limiter.consume(owner,10,60)).toBe(false);expect(db.query.mock.calls[0][0]).toContain('hits=rate_limit_buckets.hits+1');});
+it('banco falha com erro sanitizado',async()=>{db.query.mockRejectedValue(new Error('password connection secret'));await expect(saveMercadoLivreTokens(owner,tokenFixture)).rejects.toThrow('STORAGE_ERROR');});
