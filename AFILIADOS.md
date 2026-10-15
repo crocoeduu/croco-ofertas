@@ -1,5 +1,7 @@
 # Afiliados · Croco Ofertas
 
+Atualização operacional de 15/10/2026: consulte [OPERACAO.md](OPERACAO.md). Esta página preserva a referência de segurança da camada de afiliados.
+
 ## Fonte oficial e limites
 
 Pesquisa de documentação em 14/10/2026: não foi encontrada API pública oficial documentada para gerar links vinculados à conta de afiliado ou verificar a titularidade de um link. OAuth da API de produtos **não** comprova adesão ao Programa de Afiliados. Não há scraping, cookies de conta, API interna ou geração de parâmetros.
@@ -22,11 +24,11 @@ A página de saída usa CSP sem scripts com `form-action` restrito ao próprio s
 
 ## Administração e operação
 
-- `/afiliados`: dashboard, cadastro, edição, desativação, CSV, configuração de canais e preparação de ofertas.
+- `/afiliados`: links, analytics, cadastro por produto e CSV. `/ofertas`: aprovação/preparação. `/configuracoes`: canais e campanhas. `/distribuicao`: fila DRY RUN.
 - Identidade: sessão opaca de OAuth existente; autorização adicional explícita pelo `ADMIN_MELI_USER_ID`, somente no servidor. Nenhuma conta recebe papel administrativo por conectar o OAuth. Não há cadastro aberto ou rota de bootstrap. O ID permitido foi definido com base na única conta já autorizada e persistida neste projeto, sem alteração de tokens/sessões.
 - Todas as APIs administrativas verificam sessão ativa no banco e a identidade permitida. Escritas verificam Origin e recusam cross-site; rate limit persistido. Sem confiar no botão escondido.
-- Gere seus links na Central oficial e cole-os no painel. Nesta versão é aceito somente HTTPS em domínios Mercado Livre explicitamente permitidos, caminho `/sec/` com identificador alfanumérico, sem query, fragmento, credencial ou porta. Outros formatos requerem documentação oficial antes de ampliar a validação; URLs comuns não são aceitas como afiliadas.
-- `original_url` precisa identificar exatamente o `product_id` informado. Para anúncio MLB, use sua URL original de anúncio, não a página de catálogo de outro ID. Links curtos não permitem verificar o destino ou proprietário via API pública: o administrador deve confirmar que gerou o link na sua conta para aquele produto e testou seu destino.
+- Gere seus links na Central oficial e cole-os no painel. Nesta versão é aceito somente HTTPS em domínios Mercado Livre explicitamente permitidos, caminho `/sec/` com identificador alfanumérico, sem query, fragmento, credencial ou porta. Links completos de produto são aceitos somente como pendentes, com consistência de item_id/wid e preservação integral; não são ativados como afiliados sem comprovação do formato de atribuição. meli.la continua bloqueado.
+- `original_url` precisa identificar exatamente o `product_id` informado. Para anúncio MLB, use sua URL original de anúncio, ou o vínculo de catálogo previamente coletado na API e consultado no servidor. Links curtos não permitem verificar o destino ou proprietário via API pública: o administrador deve confirmar que gerou o link na sua conta para aquele produto e testou seu destino.
 - `verified` significa **confirmação administrativa**, nunca validação pelo Mercado Livre. Proveniência persistida: `administrator_registered`. `verified_at` e `last_checked_at` são datas dessa verificação local, não varredura de disponibilidade da página.
 - URL alterada exige renovar a declaração no formulário; alterações usam timestamp com precisão PostgreSQL para impedir sobrescrita concorrente. DELETE desativa, preservando analytics. Marque link quebrado `invalid` ou `disabled` manualmente; não fazemos scraping nem HEAD automatizado de link.
 - A identidade de cada ID compartilhável (marketplace/produto/canal/etiqueta) é imutável na API. Para mudar a associação/campanha, desative e cadastre um novo link. URLs e notas podem ser corrigidas com nova confirmação. Um card antigo nunca passa a abrir outro produto por uma edição de cadastro.
@@ -42,7 +44,7 @@ A página de saída usa CSP sem scripts com `form-action` restrito ao próprio s
 
 Se campanha foi informada, a etiqueta precisa corresponder. Sem campanha: preferir etiqueta vazia; uma única etiqueta disponível é escolhida automaticamente. Havendo várias sem padrão, ficar pendente em vez de escolher campanha arbitrária. Etiquetas são tracking interno; etiquetas oficiais devem ser escolhidas no gerador oficial antes de copiar o link. Nunca anexamos parâmetros.
 
-O Radar mostra `Link afiliado pronto` ou `Link afiliado pendente`. O botão Ver oferta usa a rota interna ligada ao ID do link, e produtos pendentes têm esse botão desabilitado. Cadastro/edição administrativo aponta para o painel, não concede acesso por si.
+O Radar mostra `Link afiliado pronto` ou `Link afiliado pendente`. O botão Ver oferta usa a rota interna ligada ao ID do link, e produtos pendentes continuam analisáveis pelo administrador no anúncio original, com divulgação afiliada bloqueada. Cadastro/edição administrativo aponta para o painel, não concede acesso por si.
 
 Cliques: tabela somente com ID, link, produto, canal, campanha e horário. Sem IP bruto, cookie, identificador de visitante ou token. Canal de fallback genérico pode ser identificado por `?channel=site`/canal permitido, vinculado à intenção assinada; jamais se aceita parâmetro `url`. Intenção só pode ser usada uma vez. Rate limit usa hash temporário de IP confiável da Vercel na tabela existente; não em analytics. Contagens são cliques confirmados, não pessoas únicas; sem promessa de filtrar todos os robôs.
 
@@ -54,7 +56,7 @@ Estados: `candidate`, `approved`, `affiliate_pending`, `ready_to_send`, `sent`, 
 
 `MessageComposer`: produto, preço e informação de anúncio confirmados; histórico real somente quando suficiente; aviso de publicidade e confirmação de condições. Mensagem usa URL afiliada original, não encurtador de terceiros. Mensagens salvas não são devolvidas em listagens: precisam ser preparadas novamente para obter texto atual. Listagem retira estado pronto se preço expirou, canal foi desativado ou link tornou-se inválido.
 
-Tabelas de preparação e histórico constituem a base da futura fila. **Nenhum transportador ou envio está implementado**. O futuro adaptador oficial deve reexecutar preparação imediatamente antes do envio, compartilhar o lock por conta/produto/canal, garantir idempotência e só registrar `sent`/histórico após recibo oficial. Campos Shopee existem na arquitetura; o provider permanece desabilitado até documentação oficial própria.
+Uma fila persistente em DRY RUN foi adicionada. **Nenhum transporte externo ou envio real está implementado**. Simulações não alteram histórico de envios reais. O futuro adaptador oficial deve reexecutar preparação imediatamente antes do envio, compartilhar o lock por conta/produto/canal, garantir idempotência e só registrar `sent`/histórico após recibo oficial. Campos Shopee existem na arquitetura; o provider permanece desabilitado até documentação oficial própria.
 
 ## Banco e segurança
 

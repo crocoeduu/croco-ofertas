@@ -64,7 +64,7 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
       const winner=record(detail.buy_box_winner);if(!winner){withoutWinner.push(detail);continue;} // Never fabricate prices from a catalogue title.
       winners++;
       const picture=Array.isArray(detail.pictures)?record(detail.pictures[0]):undefined;
-      const product=normalizeProduct({...winner,id:winner.item_id,title:detail.name,permalink:cataloguePermalink(detail),secure_thumbnail:picture?.url});
+      const product=normalizeProduct({...winner,id:winner.item_id,title:detail.name,permalink:cataloguePermalink(detail),secure_thumbnail:firstProductImage(picture)});
       if(product){product.catalogId=productId(detail.id);unique.set(product.id,product);}
     }
   }
@@ -90,7 +90,7 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
     let perCatalog=0;
     for(const value of offers.results) {
       const item=record(value);if(!item||(item.status!=null&&item.status!=='active')||item.available_quantity===0)continue;
-      const product=normalizeProduct({...item,id:item.item_id??item.id,currency_id:item.currency_id??offers.currency_id,title:item.title??detail.name,permalink:marketUrl(item.permalink)??cataloguePermalink(detail),secure_thumbnail:item.secure_thumbnail??picture?.url});
+      const product=normalizeProduct({...item,id:item.item_id??item.id,currency_id:item.currency_id??offers.currency_id,title:item.title??detail.name,permalink:marketUrl(item.permalink)??cataloguePermalink(detail),secure_thumbnail:firstProductImage(item.secure_thumbnail,item.thumbnail,picture)});
       if(product){product.catalogId=id;if(perCatalog<4){unique.set(product.id,product);perCatalog++;}else overflow.push(product);if(unique.size>=20)break;}
     }
   }

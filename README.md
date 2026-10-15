@@ -1,6 +1,6 @@
 # Croco Ofertas
 
-Site publicado: [croco-ofertas.vercel.app](https://croco-ofertas.vercel.app). [Radar de Ofertas](https://croco-ofertas.vercel.app/ofertas). [Health check](https://croco-ofertas.vercel.app/api/health). Callback de produção: `https://croco-ofertas.vercel.app/api/mercadolivre/callback`. OAuth e persistência criptografada estão configurados. Veja `VALIDACAO.md` para resultados e limites dos testes anteriores e a seção Radar abaixo para esta etapa.
+Site publicado: [croco-ofertas.vercel.app](https://croco-ofertas.vercel.app). [Radar de Ofertas](https://croco-ofertas.vercel.app/radar). [Health check](https://croco-ofertas.vercel.app/api/health). Callback de produção: `https://croco-ofertas.vercel.app/api/mercadolivre/callback`. OAuth e persistência criptografada estão configurados. Veja [OPERACAO.md](OPERACAO.md) para a versão operacional atual; `VALIDACAO.md` registra os testes da etapa anterior.
 
 Central de ofertas em Next.js 16 (App Router), React 19, TypeScript, Node.js 24 e npm: OAuth Authorization Code com PKCE S256, persistência AES-GCM, busca backend de anúncios, histórico próprio, scoring explicável e cadastro de cupons não verificados. Afiliados e envio ao WhatsApp são etapas seguintes; links atuais não geram comissão.
 
@@ -153,31 +153,32 @@ Os códigos internos incluem ENV_MISSING, ENV_INVALID, INVALID_STATE, PKCE_MISSI
 
 ### Radar de Ofertas
 
-`/ofertas` usa a sessão opaca já criada pelo OAuth, sem alterar o callback, os cookies ou a chave AES. Rotas:
+`/radar` usa a sessão opaca já criada pelo OAuth, sem alterar o callback, os cookies ou a chave AES. Rotas:
 
 - `POST /api/mercadolivre/search`: JSON `{ "query": "fone bluetooth", "offset": 0 }`. Origem exata obrigatória, sessão válida e limites persistentes por sessão/IP. Busca 20 anúncios por página no site MLB, somente BRL. Tokens não entram no JSON público.
-- `GET /api/mercadolivre/products/MLB123456789/history`: até 30 dias de coletas, limitado aos produtos da sessão.
+- `GET /api/mercadolivre/products/MLB123456789/history`: `?days=7|30|90`, limitado aos produtos da mesma conta autenticada.
 - `GET /api/offers/coupons` e `POST /api/offers/coupons`: cupons da sessão. Cadastro manual contém código, tipo/valor, compra mínima, teto, anúncio opcional e datas. O cliente não pode marcar como verificado.
 
 A migração `supabase/migrations/20261014212846_offers_products_history_coupons.sql` cria o schema privado `offers`, com `products`, `price_observations` e `coupons`. RLS está ativo sem políticas públicas; `anon`/`authenticated` não têm acesso. O Data API permanece desligado. O backend `pg` aplica ownership em todas as consultas. Não há migração automática em login/callback nem no build.
 
-Preços ficam em centavos inteiros. Produto e observação são salvos em uma transação, com no máximo uma observação por hora/anúncio/sessão. O score v1 compara a mediana de cada dia e depois a mediana dos dias, exigindo três dias anteriores com dados comparáveis (mesmo anúncio, moeda e condição), nos últimos 30 dias. O dia atual não compõe a referência. O score provisório fica limitado a 35/100; desconto anunciado é identificado como informação do anúncio. Cupom manual não altera preço ou score.
+Preços ficam em centavos inteiros. Produto e observação são salvos em uma transação, com no máximo uma observação por hora/anúncio/conta, com locks entre sessões. O score v2 compara a mediana de cada dia e depois a mediana dos dias, exigindo três dias anteriores com dados comparáveis (mesmo anúncio, moeda e condição), nos últimos 30 dias. O dia atual não compõe a referência. O score provisório fica limitado a 35/100; desconto anunciado é identificado como informação do anúncio. Cupom manual não altera preço ou score.
 
-O histórico pertence à sessão atual; uma reconexão cria outra sessão e não transfere automaticamente o histórico. Encerramento/limpeza da conexão remove os dados vinculados. Nesta etapa a coleta ocorre nas buscas, sem agendador automático. Preço pode variar por opção, conta, quantidade, pagamento e CEP; confirme no checkout.
+O histórico das sessões da mesma conta do Mercado Livre é consultado em conjunto. Dados antigos são preservados. A coleta ocorre nas buscas e pela watchlist; o agendador está preparado, mas depende de CRON_SECRET e configuração autorizada. Nunca apague conexões para resolver falhas de interface: há dados vinculados por FK. Preço pode variar por opção, conta, quantidade, pagamento e CEP; confirme no checkout.
 
 Um 403 da API de busca retorna `MELI_SEARCH_FORBIDDEN` e preserva OAuth/persistência. Não indica senha de banco incorreta. Acesso à busca precisa ser validado com a aplicação e conta reais; não é garantido pelo sucesso do OAuth.
 
 Após a primeira negação da busca de anúncios, há uma consulta ao catálogo documentado em `providers/mercadolivre/README.md`. São usados preços reais em BRL do anúncio vencedor (`buy_box_winner`), quando disponível, ou dos anúncios associados. Um 404 individual é ignorado; acesso negado a um recurso de preços encerra a consulta. O link de catálogo vem da API ou é construído no domínio oficial a partir de um product ID validado. A consulta tem deadline de 20 segundos e detalhes do catálogo são carregados em lotes de quatro, sem retries ou mudanças de permissão.
 
-### Próxima etapa: afiliados e WhatsApp
+### Operação, afiliados e distribuição
 
-1. Confirmar elegibilidade da conta e os mecanismos oficiais disponíveis para geração de links com comissão. Implementar `AffiliateLinkProvider` com links reais e fonte verificável; não converter um permalink comum em link afiliado por suposição.
-2. Acrescentar autenticação de operador para ações administrativas, destinos aprovados e consentimento de recebimento. A sessão OAuth atual não é uma identidade de administrador global.
-3. Preparar fila persistente de distribuição com status, deduplicação por oferta/destino, idempotência e aprovação de rascunhos. Conectar somente um canal oficial que suporte o destino pretendido, após verificar as capacidades atuais. Não automatizar WhatsApp Web.
-4. Habilitar envio somente depois de testar o link, o cupom e a integração com destinatário de teste explicitamente autorizado. Nenhuma mensagem é enviada nesta etapa.
+A versão atual separa `/dashboard`, `/radar`, `/monitoramento`, `/afiliados`, `/ofertas`, `/cupons`, `/distribuicao` e `/configuracoes`. Administração exige sessão ativa e `ADMIN_MELI_USER_ID` autorizado no servidor. Dashboard e páginas operacionais usam noindex; isso complementa a autorização, sem substituí-la.
+
+As migrations `20261015123227_radar_monitoring_queue.sql` e `20261015130223_watch_evidence.sql` adicionam monitoramento, alertas, configurações, campanhas, jobs, auditoria e fila sem apagar dados. A fila só simula; nenhum transporte de WhatsApp ou Shopee está configurado. Aprovação continua manual, com revalidação oficial e deduplicação antes de compor/simular.
+
+Links completos de produto podem ser guardados como pendentes e preservados integralmente. A ativação continua restrita ao formato oficial suportado com confirmação administrativa; não há API pública encontrada para comprovar titularidade. [OPERACAO.md](OPERACAO.md) detalha o caso MLB4609951889, limitações oficiais, parâmetros de segurança, custos, retenção e rollback.
 
 `lib/offers/contracts.ts` separa MercadoLivreSearchService, PriceHistoryService, OfferScoringService, AffiliateLinkService, AffiliateLinkProvider, CouponService e DistributionProvider. `providers/mercadolivre` e `providers/shopee` registram os limites da etapa atual.
 
-Campos como quantidade vendida, preço anterior, reputação e frete são opcionais, pois dependem de permissões e do que a API realmente oferece. Descontos devem ser confrontados com histórico próprio de observações; não considere um “OFF” informado pelo anúncio como comprovação. Busca de produtos e geração de links afiliados são funções distintas. Novas integrações serão oficiais, sem inventar APIs de Shopee/afiliados ou automatizar WhatsApp Web. Futuras APIs administrativas precisam de autenticação, autorização server-side e controles CSRF antes de existir; robots/noindex não são segurança.
+Campos como quantidade vendida, preço anterior, reputação e frete são opcionais, pois dependem de permissões e do que a API realmente oferece. Descontos devem ser confrontados com histórico próprio de observações; não considere um “OFF” informado pelo anúncio como comprovação. Busca de produtos e geração de links afiliados são funções distintas. Novas integrações serão oficiais, sem inventar APIs de Shopee/afiliados ou automatizar WhatsApp Web. APIs administrativas exigem autenticação, autorização server-side e controles CSRF; robots/noindex não são segurança.
 
 Diagnóstico privado (com variáveis injetadas no ambiente seguro): `npm run db:check` executa `SELECT 1` e consultas sem tokens nas três tabelas. O servidor registra somente categorias fixas `DB_*`; nunca mensagens, URLs, senhas ou tokens.
