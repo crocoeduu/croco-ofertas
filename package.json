@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": "24.x" },
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev",
     "start": "next start",
@@ -15,25 +17,28 @@
     "check": "npm run lint && npm run typecheck && npm test && npm run security:check && npm run build",
     "security:check": "node scripts/security-check.mjs",
     "db:check": "node --env-file-if-exists=.env.local scripts/check-database.mjs",
-    "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs"
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "16.4.0",
+    "pg": "8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "pg": "8.23.1",
     "server-only": "0.0.1"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.9.0",
     "eslint": "10.12.0",
-    "@eslint/js": "10.0.1",
-    "typescript-eslint": "8.71.2",
     "eslint-plugin-react-hooks": "7.1.1",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4",
     "vitest": "5.0.4"
   }
 }

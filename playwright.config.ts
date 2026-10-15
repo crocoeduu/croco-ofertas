@@ -1,0 +1,2 @@
+import {defineConfig} from '@playwright/test';
+export default defineConfig({testDir:'./tests/e2e',testMatch:'**/*.e2e.ts',fullyParallel:true,workers:2,retries:0,reporter:'list',use:{baseURL:'http://127.0.0.1:3219',browserName:'chromium',trace:'retain-on-failure'},webServer:{command:'node node_modules/vite/bin/vite.js --config tests/e2e/vite.config.ts',url:'http://127.0.0.1:3219',reuseExistingServer:false},projects:[320,375,390,430,768,1440].map(width=>({name:`width-${width}`,use:{viewport:{width,height:900}}}))});

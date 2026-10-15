@@ -1,0 +1,17 @@
+'use client';
+import {useState} from 'react';
+import {historySummary} from '@/lib/offers/history';
+type Entry={price:number;observedAt:string;condition?:string};
+const money=(n:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n);
+export function PriceHistory({id,price,condition}:{id:string;price:number;condition?:string}){
+ const [days,setDays]=useState(30);const [entries,setEntries]=useState<Entry[]|null>(null);const [error,setError]=useState('');const [busy,setBusy]=useState(false);
+ async function load(window:number){if(busy)return;setDays(window);setBusy(true);setError('');try{const r=await fetch(`/api/mercadolivre/products/${id}/history?days=${window}`,{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error();const d=await r.json();setEntries(d.history);}catch{setError('Histórico indisponível agora. A busca continua disponível.');}finally{setBusy(false);}}
+ const same=entries?.filter(e=>e.condition===condition)??[];const summary=historySummary(same.map(e=>({...e,observedAt:new Date(e.observedAt)})),price);
+ const prices=same.map(e=>e.price);const min=Math.min(...prices),max=Math.max(...prices);const first=same.length?new Date(same[0].observedAt).getTime():0;const last=same.length?new Date(same.at(-1)!.observedAt).getTime():1;
+ const points=same.map(e=>`${20+(new Date(e.observedAt).getTime()-first)/Math.max(1,last-first)*280},${130-(e.price-min)/Math.max(1,max-min)*100}`).join(' ');
+ return <details onToggle={e=>{if(e.currentTarget.open&&entries===null&&!busy&&!error)void load(days);}}><summary>📊 Histórico de preços</summary><div className="button-row" aria-label="Período do histórico">{[7,30,90].map(n=><button key={n} type="button" aria-pressed={days===n} disabled={busy} onClick={()=>void load(n)}>{n} dias</button>)}</div>
+ {busy?<p role="status">Carregando histórico…</p>:error?<p role="alert">{error} <button onClick={()=>void load(days)}>Tentar novamente</button></p>:summary?<>
+ <svg className="history-chart" viewBox="0 0 320 160" role="img" aria-label={`Preços registrados pelo Croco em ${days} dias: mínimo ${money(summary.minimum)}, máximo ${money(summary.maximum)}. ${summary.count} observações.`}><line x1="20" y1="140" x2="300" y2="140" stroke="#bdcbb3"/><polyline fill="none" stroke="#285e40" strokeWidth="3" points={points}/>{same.map((e,i)=><circle key={i} cx={points.split(' ')[i].split(',')[0]} cy={points.split(' ')[i].split(',')[1]} r="3" fill="#285e40"/>)}<text x="20" y="15" fill="#285e40" fontSize="12">{money(max)}</text><text x="20" y="157" fill="#285e40" fontSize="12">{money(min)}</text></svg>
+ <p>Menor preço registrado pelo Croco nos últimos {days} dias: <strong>{money(summary.minimum)}</strong>.</p><p>Atual: {money(price)} · Máximo: {money(summary.maximum)} · Média: {money(summary.average)} · {summary.count} observações · Variação: {summary.variationPercent.toFixed(1)}%.</p><p>Primeira: {summary.first.toLocaleString('pt-BR')} · Última: {summary.last.toLocaleString('pt-BR')}.</p><details><summary>Ver dados do gráfico</summary><div className="history-scroll"><table><caption>Observações da mesma moeda e condição</caption><thead><tr><th>Data</th><th>Preço</th></tr></thead><tbody>{same.map(e=><tr key={e.observedAt}><td>{new Date(e.observedAt).toLocaleString('pt-BR')}</td><td>{money(e.price)}</td></tr>)}</tbody></table></div></details>
+ </>:entries&&<p>Sem observações comparáveis neste período. O histórico começa na primeira coleta.</p>}</details>;
+}

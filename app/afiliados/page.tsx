@@ -1,17 +1,18 @@
-import Link from 'next/link';
-import { cookies } from 'next/headers';
-import { administratorSession } from '@/lib/affiliates/admin';
-import { affiliateDashboard, listAffiliateLinks } from '@/lib/affiliates/repository';
-import { listChannels, listPreparedOffers } from '@/lib/distribution/service';
-import { AffiliateAdmin } from '@/components/affiliate-admin';
-export const dynamic='force-dynamic';
-export default async function AffiliatesPage({searchParams}:{searchParams:Promise<{product_id?:string}>}) {
-  const jar=await cookies();const session=jar.get('__Host-croco_session')?.value??(process.env.NODE_ENV!=='production'?jar.get('croco_session')?.value:undefined);
-  let authorized=false;let unavailable=false;
-  try{authorized=await administratorSession(session);}catch{unavailable=true;}
-  const params=await searchParams;const productId=typeof params.product_id==='string'&&/^MLB[0-9]{6,18}$/.test(params.product_id)?params.product_id:'';
-  const data=authorized?await Promise.all([listAffiliateLinks(),affiliateDashboard(),listChannels(),listPreparedOffers()]):null;
-  return <div className="shell"><header className="header"><Link className="brand" href="/">Croco<span className="brand-light">Ofertas</span></Link><Link className="back-link" href="/ofertas">Radar de Ofertas →</Link></header><main><section className="intro"><div className="eyebrow"><span/> ADMINISTRAÇÃO</div><h1>Seus links. <span>Suas ofertas.</span></h1><p>Links oficiais cadastrados uma vez.<br/>Reutilização por produto, canal e campanha.</p></section>
-    {data?<AffiliateAdmin initialLinks={data[0]} initialDashboard={data[1]} initialChannels={data[2]} initialOffers={data[3].map(row=>({...row,revalidated_at:row.revalidated_at?.toISOString()??''}))} productId={productId}/>:<section className="notice"><h2>Acesso administrativo</h2><p>{unavailable?'Não foi possível verificar seu acesso agora.':'Esta área exige uma sessão ativa da conta administradora autorizada no servidor. Conectar outra conta não concede essa permissão.'}</p><Link href="/api/mercadolivre/login">Conectar minha conta administradora →</Link></section>}
-  </main><footer><span>© {new Date().getFullYear()} Croco Ofertas</span><Link href="/">Central de conexões</Link></footer></div>;
+import type {Metadata} from 'next';
+import {adminPageContext} from '@/lib/operations/page-context';
+import {affiliateDashboard,listAffiliateLinks} from '@/lib/affiliates/repository';
+import {opportunities} from '@/lib/operations/dashboard';
+import {AffiliateAdmin} from '@/components/affiliate-admin';
+import {WorkspaceShell} from '@/components/workspace-shell';
+import {ProductImage} from '@/components/product-image';
+export const dynamic='force-dynamic';export const metadata:Metadata={robots:{index:false,follow:false}};
+export default async function Page({searchParams}:{searchParams:Promise<{product_id?:string}>}){
+ const c=await adminPageContext();if(!c.authorized)return <WorkspaceShell><section className="intro"><h1>Acesso administrativo</h1><p>Use sua conta administradora autorizada no servidor.</p><a href="/api/mercadolivre/login">Conectar Mercado Livre →</a></section></WorkspaceShell>;
+ const params=await searchParams;const productId=typeof params.product_id==='string'&&/^MLB[0-9]{6,18}$/.test(params.product_id)?params.product_id:'';
+ let data;try{data=await Promise.all([listAffiliateLinks(),affiliateDashboard(),opportunities(c.owner)]);}catch{return <WorkspaceShell><section className="notice"><h1>Afiliados indisponíveis</h1><p>Não foi possível carregar esta seção. Tente novamente em instantes.</p></section></WorkspaceShell>;}
+ const [links,analytics,products]=data;const product=products.find(p=>p.id===productId);
+ return <WorkspaceShell><section className="intro"><div className="eyebrow">PROGRAMA DE AFILIADOS DO MERCADO LIVRE</div><h1>Seus links. <span>Suas ofertas.</span></h1><p>Gere na sua conta, cadastre uma vez e reutilize por canal.</p></section>
+ <AffiliateAdmin key={productId} initialLinks={links} initialDashboard={analytics} productId={productId} product={product}/>
+ <section className="offer-section"><h2>Produtos que precisam do seu link</h2><p className="offer-help">Anúncios coletados pelo Croco sem link afiliado pronto para o site. Escolha o produto para preencher o cadastro automaticamente.</p><div className="products-grid">{products.filter(p=>p.affiliate.status==='affiliate_pending').slice(0,12).map(p=><article className="product-card" key={p.id}><ProductImage src={p.imageUrl} title={p.name}/><h3>{p.name}</h3><strong>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(p.price)}</strong><p>Score {p.scoring.score} · {p.id}</p><a className="product-link" href={`/afiliados?product_id=${p.id}#links`}>Adicionar meu link afiliado →</a></article>)}</div>{!products.length&&<div className="empty-state">Encontre seu primeiro produto no Radar. <a href="/radar">Buscar produtos →</a></div>}</section>
+ </WorkspaceShell>;
 }

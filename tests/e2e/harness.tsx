@@ -1,0 +1,18 @@
+// Isolated UI fixture runner. This is outside app/ and never exposes an authentication bypass.
+import {createRoot} from 'react-dom/client';
+import {WorkspaceShell} from '../../components/workspace-shell';
+import {OffersExplorer,CouponsPanel} from '../../components/offers-explorer';
+import {OperationsPanel} from '../../components/operations-panel';
+import {AffiliateAdmin} from '../../components/affiliate-admin';
+import {scoreOffer} from '../../lib/offers/scoring';
+import type {Product} from '../../lib/offers/contracts';
+import type {workspaceData} from '../../lib/operations/dashboard';
+import '../../app/globals.css';
+const product:Product={provider:'mercadolivre',id:'MLB123456789',name:'Mouse de teste para validação da interface',price:80,previousPrice:100,currency:'BRL',condition:'new',permalink:'https://produto.mercadolivre.com.br/MLB-123456789-mouse',imageUrl:'https://http2.mlstatic.com/test.jpg',available:true};
+const analytics={counts:{},clicks:0,products:[],channels:[],campaigns:[],daily:[]};
+const settings={watchlistEnabled:true,autoApprovalEnabled:false,distributionEnabled:true,whatsappEnabled:false,paused:false,dryRun:true,minimumScore:60,watchIntervalHours:24,maximumPerHour:2,maximumPerDay:8,minimumIntervalMinutes:60,windowStart:8,windowEnd:22,collectionBudget:3};
+const data:Awaited<ReturnType<typeof workspaceData>>={products:[{...product,updatedAt:new Date().toISOString(),scoring:scoreOffer(product,[]),affiliate:{status:'affiliate_pending'}}],watchlist:[{id:'12345678-1234-4123-8123-123456789012',product_id:product.id,target_cents:'7500',minimum_drop:5,minimum_score:60,free_shipping:false,active:true,baseline_cents:'10000',last_checked_at:null,last_error_code:null,failures:0}],notifications:[],analytics,offers:[],settings,campaigns:[],historyProducts:1};
+const section=location.pathname;
+const panel=section==='/monitoramento'?'watchlist':section==='/ofertas'?'offers':section==='/distribuicao'?'queue':section==='/configuracoes'?'settings':'dashboard';
+const panelData=panel==='queue'?{queue:new URLSearchParams(location.search).has('ready')?[{id:'12345678-1234-4123-8123-123456789012',offer_id:'12345678-1234-4123-8123-123456789012',product_id:product.id,channel:'site',campaign:'',state:'queued',message:'Mensagem de teste · Publicidade',price_snapshot:'8000',score_snapshot:80,scheduled_at:new Date().toISOString(),attempts:0,last_error_code:null,simulation_at:null,sent_at:null}]:[],settings,campaigns:[]}:panel==='settings'?{settings,channels:[],jobs:[],audit:[],campaigns:[]}:data;
+createRoot(document.getElementById('root')!).render(<WorkspaceShell><section className="intro"><h1>Ambiente de testes</h1></section>{section==='/radar'?<OffersExplorer connected/>:section==='/afiliados'?<AffiliateAdmin initialLinks={[]} initialDashboard={analytics} productId={product.id} product={product}/>:section==='/cupons'?<CouponsPanel connected/>:<OperationsPanel section={panel} initial={panelData} productId={product.id}/>}</WorkspaceShell>);

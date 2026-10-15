@@ -1,19 +1,7 @@
-import Link from 'next/link';
-import { cookies } from 'next/headers';
-import { CrocoMark } from '@/components/icons';
-import { OffersExplorer, CouponsPanel } from '@/components/offers-explorer';
-import { hasConnection } from '@/lib/mercadolivre/tokens';
-import { digest } from '@/lib/crypto';
-export const dynamic = 'force-dynamic';
-export default async function OffersPage() {
-  const jar = await cookies();
-  const session = jar.get('__Host-croco_session')?.value ?? (process.env.NODE_ENV !== 'production' ? jar.get('croco_session')?.value : undefined);
-  let connected = false; let unavailable = false;
-  if(session && /^[A-Za-z0-9_-]{43}$/.test(session)) {try {connected=await hasConnection(digest(session));} catch {unavailable=true;}}
-  return <div className="shell"><header className="header"><Link className="brand" href="/" aria-label="Croco Ofertas, início"><span className="brand-mark"><CrocoMark/></span><span>Croco<span className="brand-light">Ofertas</span></span></Link><Link className="back-link" href="/">Suas conexões →</Link></header>
-    <main><section className="intro"><div className="eyebrow"><span/> ENCONTRE E ACOMPANHE</div><h1>Radar de <span>Ofertas.</span></h1><p>Produtos reais. Histórico próprio.<br/>Compare oportunidades com critérios claros.</p></section>
-      {unavailable && <div className="notice" role="alert">Não foi possível verificar sua conexão agora. Tente novamente mais tarde.</div>}
-      <OffersExplorer connected={connected}/><CouponsPanel connected={connected}/>
-      <section className="notice"><strong>Afiliados</strong><span>Links oficiais cadastrados pelo administrador são reutilizados por produto e canal. Ofertas sem link ficam pendentes. Nenhum envio automático está ativo.</span><Link href="/afiliados">Links de afiliado e preparação de ofertas →</Link></section>
-    </main><footer><span>© {new Date().getFullYear()} Croco Ofertas</span><Link href="/">Central de conexões</Link></footer></div>;
-}
+import type {Metadata} from 'next';
+import {adminPageContext} from '@/lib/operations/page-context';
+import {workspaceData} from '@/lib/operations/dashboard';
+import {OperationsPanel} from '@/components/operations-panel';
+import {WorkspaceShell} from '@/components/workspace-shell';
+export const dynamic='force-dynamic';export const metadata:Metadata={robots:{index:false,follow:false}};
+export default async function Page({searchParams}:{searchParams:Promise<{product_id?:string}>}){const c=await adminPageContext();if(!c.authorized)return <WorkspaceShell><section className="intro"><h1>Acesso administrativo</h1><p>Conecte sua conta administradora para aprovar e preparar ofertas.</p><a href="/api/mercadolivre/login">Conectar Mercado Livre →</a></section></WorkspaceShell>;let data;try{data=await workspaceData(c.owner,'offers');}catch{return <WorkspaceShell><section className="notice"><h1>Ofertas indisponíveis</h1><a href="/radar">Voltar ao Radar</a></section></WorkspaceShell>;}const p=await searchParams;return <WorkspaceShell><section className="intro"><div className="eyebrow">DO RADAR À DIVULGAÇÃO</div><h1>Ofertas <span>em preparação.</span></h1><p>Aprovação manual, revalidação oficial e prévia antes da fila.</p></section><OperationsPanel section="offers" initial={data} productId={typeof p.product_id==='string'&&/^MLB[0-9]{6,18}$/.test(p.product_id)?p.product_id:''}/></WorkspaceShell>;}
