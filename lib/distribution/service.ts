@@ -47,7 +47,7 @@ export async function prepareOffer(owner:string,body:Record<string,unknown>,guar
   return transaction(async db=>{
     // Shared product/channel lock prevents concurrent preparation from racing with future dispatch adapters.
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${account}:mercadolivre:${id}:${channel}`]);
-    if(guardId){const guarded=await db.query(`SELECT id FROM offers.distribution_offers WHERE account_id=$1 AND id=$2 AND approved AND state NOT IN('disabled','expired','candidate') FOR UPDATE`,[account,guardId]);if(guarded.rowCount!==1)throw new AppError('OFFER_NOT_READY');}
+    if(guardId){const guarded=await db.query(`SELECT id FROM offers.distribution_offers WHERE account_id=$1 AND id=$2 AND approved AND state NOT IN('disabled','expired','candidate') AND product_id=$3 AND channel=$4 AND campaign=$5 FOR UPDATE`,[account,guardId,id,channel,campaign]);if(guarded.rowCount!==1)throw new AppError('OFFER_NOT_READY');}
 
     const last=(await db.query<{last_sent_at:Date;last_sent_price:string;last_sent_score:number;verified_coupon_id:string|null}>('SELECT * FROM offers.distribution_history WHERE account_id=$1 AND marketplace=$2 AND product_id=$3 AND channel=$4 FOR UPDATE',[account,'mercadolivre',id,channel])).rows[0];
     // Lock the currently active link and channel too: an edit/disable cannot race this decision.

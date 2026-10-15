@@ -13,13 +13,13 @@ export async function recordProducts(owner: string, products: Product[]): Promis
     catalog_id:product.catalogId??null,available:product.available??null,sold_quantity:product.soldQuantity??null,category:product.category??null,condition:product.condition??'not_specified',free_shipping:product.shipping?.free??null})));
   // One transaction: product metadata and observations either both persist or neither does.
   await transaction(async db => {
+      // Sorted transaction locks serialize hourly collection across sessions of the same ML account.
+      await db.query(`SELECT pg_advisory_xact_lock(hashtextextended(c.user_id::text||':price:'||id,0)) FROM public.meli_connections c CROSS JOIN unnest($2::text[]) AS id WHERE c.owner_hash=$1 ORDER BY id`,[owner,products.map(p=>p.id).sort()]);
       await db.query(`INSERT INTO offers.products (owner_hash,provider,product_id,name,price_cents,currency,previous_price_cents,permalink,image_url,category,condition,free_shipping,catalog_id,available,sold_quantity)
         SELECT $1,'mercadolivre',r.product_id,r.name,r.price_cents,'BRL',r.previous_price_cents,r.permalink,r.image_url,r.category,r.condition,r.free_shipping,r.catalog_id,r.available,r.sold_quantity
         FROM jsonb_to_recordset($2::jsonb) AS r(product_id text,name text,price_cents bigint,previous_price_cents bigint,permalink text,image_url text,category text,condition text,free_shipping boolean,catalog_id text,available boolean,sold_quantity bigint)
         ON CONFLICT (owner_hash,provider,product_id) DO UPDATE SET name=EXCLUDED.name,price_cents=EXCLUDED.price_cents,previous_price_cents=EXCLUDED.previous_price_cents,permalink=EXCLUDED.permalink,image_url=EXCLUDED.image_url,category=EXCLUDED.category,condition=EXCLUDED.condition,free_shipping=EXCLUDED.free_shipping,catalog_id=COALESCE(EXCLUDED.catalog_id,offers.products.catalog_id),available=EXCLUDED.available,sold_quantity=EXCLUDED.sold_quantity,updated_at=NOW()`,
         [owner,records]);
-      // Sorted transaction locks serialize hourly collection across sessions of the same ML account.
-      await db.query(`SELECT pg_advisory_xact_lock(hashtextextended(c.user_id::text||':price:'||id,0)) FROM public.meli_connections c CROSS JOIN unnest($2::text[]) AS id WHERE c.owner_hash=$1 ORDER BY id`,[owner,products.map(p=>p.id).sort()]);
       await db.query(`INSERT INTO offers.price_observations (owner_hash,provider,product_id,bucket,price_cents,currency,condition)
         SELECT $1,'mercadolivre',r.product_id,FLOOR(EXTRACT(EPOCH FROM NOW())/3600)::bigint,r.price_cents,'BRL',r.condition
         FROM jsonb_to_recordset($2::jsonb) AS r(product_id text,price_cents bigint,condition text)

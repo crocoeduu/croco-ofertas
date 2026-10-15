@@ -6,7 +6,8 @@ export const messageTemplates=['short','complete','low_price','moderate'] as con
 export type MessageTemplate=typeof messageTemplates[number];
 export class MessageComposer {
   compose(input:{state:'ready_to_send';product:Product;scoring:OfferScore;affiliate:AffiliateResolution;available:boolean;checkedAt:Date;template?:MessageTemplate},now=new Date()):string {
-    if(input.state!=='ready_to_send'||input.affiliate.status!=='affiliate_ready'||!input.available||now.getTime()-input.checkedAt.getTime()>300000||input.checkedAt>now||!Number.isFinite(input.product.price)||input.product.price<=0)throw new AppError('OFFER_NOT_READY');
+    const age=now.getTime()-input.checkedAt.getTime();
+    if(!Number.isFinite(age)||age<0||input.state!=='ready_to_send'||input.affiliate.status!=='affiliate_ready'||!input.available||now.getTime()-input.checkedAt.getTime()>300000||input.checkedAt>now||!Number.isFinite(input.product.price)||input.product.price<=0)throw new AppError('OFFER_NOT_READY');
     const product=input.product;const url=officialAffiliateUrl(input.affiliate.affiliateUrl);
     const money=(price:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(price);
     if(product.currency!=='BRL')throw new AppError('OFFER_NOT_READY');
