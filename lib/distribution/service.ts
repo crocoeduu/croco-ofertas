@@ -10,7 +10,7 @@ import { affiliateAccount, affiliateQuery } from '../affiliates/repository';
 import { affiliateChannel, affiliateId, campaignLabel } from '../affiliates/validation';
 import type { AffiliateChannel } from '../offers/contracts';
 import { defaultPolicy, offerReadiness, type DistributionPolicy, type OfferState } from './readiness';
-import { MessageComposer } from './message-composer';
+import { MessageComposer, messageTemplates, type MessageTemplate } from './message-composer';
 
 export interface ChannelConfig extends DistributionPolicy {channel:AffiliateChannel;enabled:boolean;public_channel:boolean;declared_in_program:boolean}
 type ChannelRow={channel:AffiliateChannel;enabled:boolean;public_channel:boolean;declared_in_program:boolean;minimum_score:number;resend_hours:number;price_drop_percent:number;score_increase:number};
@@ -35,25 +35,29 @@ export async function disablePreparedOffer(body:Record<string,unknown>) {
   const rows=await affiliateQuery("UPDATE offers.distribution_offers SET state='disabled',message=NULL,updated_at=NOW() WHERE account_id=$1 AND id=$2 RETURNING id",[affiliateAccount(),affiliateId(body.id)]);
   if(!rows.length)throw new AppError('PRODUCT_NOT_FOUND');
 }
-export async function prepareOffer(owner:string,body:Record<string,unknown>) {
-  if(Object.keys(body).some(key=>!['product_id','channel','campaign','approved'].includes(key))||typeof body.approved!=='boolean')throw new AppError('REQUEST_INVALID');
+export async function prepareOffer(owner:string,body:Record<string,unknown>,guardId?:string,policyOverride?:Partial<DistributionPolicy>) {
+  if(Object.keys(body).some(key=>!['product_id','channel','campaign','approved','template'].includes(key))||typeof body.approved!=='boolean')throw new AppError('REQUEST_INVALID');
+  if(body.template!==undefined&&!messageTemplates.includes(body.template as MessageTemplate))throw new AppError('REQUEST_INVALID');
   const id=productId(body.product_id);const channel=affiliateChannel(body.channel);const campaign=campaignLabel(body.campaign??'');if(channel==='generic')throw new AppError('REQUEST_INVALID');
   // Every preparation, even after a prior approval, re-reads the official listing.
   const current=await revalidateMercadoLivre(owner,id);await recordProducts(owner,[current.product]);
   const [histories,affiliate,channels]=await Promise.all([listPriceHistories(owner,[id]),new AffiliateLinkService().forProduct(current.product,channel,campaign),listChannels()]);
   const scoring=scoreOffer(current.product,histories.get(id)??[]);const selected=channels.find(row=>row.channel===channel);const account=affiliateAccount();
+  const policy={...(selected??defaultPolicy),minimumScore:Math.max(selected?.minimumScore??defaultPolicy.minimumScore,policyOverride?.minimumScore??0),resendHours:Math.max(selected?.resendHours??defaultPolicy.resendHours,policyOverride?.resendHours??0)};
   return transaction(async db=>{
     // Shared product/channel lock prevents concurrent preparation from racing with future dispatch adapters.
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${account}:mercadolivre:${id}:${channel}`]);
+    if(guardId){const guarded=await db.query(`SELECT id FROM offers.distribution_offers WHERE account_id=$1 AND id=$2 AND approved AND state NOT IN('disabled','expired','candidate') FOR UPDATE`,[account,guardId]);if(guarded.rowCount!==1)throw new AppError('OFFER_NOT_READY');}
+
     const last=(await db.query<{last_sent_at:Date;last_sent_price:string;last_sent_score:number;verified_coupon_id:string|null}>('SELECT * FROM offers.distribution_history WHERE account_id=$1 AND marketplace=$2 AND product_id=$3 AND channel=$4 FOR UPDATE',[account,'mercadolivre',id,channel])).rows[0];
     // Lock the currently active link and channel too: an edit/disable cannot race this decision.
     const activeLink=affiliate.status==='affiliate_ready'?(await db.query("SELECT 1 FROM offers.affiliate_links WHERE id=$1 AND account_id=$2 AND status='verified' AND own_link_confirmed AND affiliate_url=$3 FOR SHARE",[affiliate.id,account,affiliate.affiliateUrl])).rowCount===1:false;
     const activeChannel=selected?.enabled?(await db.query('SELECT 1 FROM offers.affiliate_channels WHERE account_id=$1 AND channel=$2 AND enabled AND public_channel AND declared_in_program FOR SHARE',[account,channel])).rowCount===1:false;
     const resolved=activeLink?affiliate:{status:'affiliate_pending' as const};
-    const readiness=offerReadiness({product:current.product,scoring,affiliate:resolved,approved:body.approved as boolean,available:current.available,checkedAt:current.checkedAt,channelConfigured:!!activeChannel,last:last?{lastSentAt:last.last_sent_at,lastSentPrice:Number(last.last_sent_price)/100,lastSentScore:last.last_sent_score,verifiedCouponId:last.verified_coupon_id}:null,policy:selected??defaultPolicy});
-    const message=readiness.state==='ready_to_send'?new MessageComposer().compose({state:'ready_to_send',...current,scoring,affiliate:resolved}):null;
-    await db.query(`INSERT INTO offers.distribution_offers (account_id,owner_hash,marketplace,product_id,channel,campaign,state,approved,affiliate_link_id,price_cents,score,revalidated_at,available,message,reasons) VALUES ($1,$2,'mercadolivre',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb) ON CONFLICT (account_id,marketplace,product_id,channel,campaign) DO UPDATE SET owner_hash=EXCLUDED.owner_hash,state=EXCLUDED.state,approved=EXCLUDED.approved,affiliate_link_id=EXCLUDED.affiliate_link_id,price_cents=EXCLUDED.price_cents,score=EXCLUDED.score,revalidated_at=EXCLUDED.revalidated_at,available=EXCLUDED.available,message=EXCLUDED.message,reasons=EXCLUDED.reasons,updated_at=NOW()`,[account,owner,id,channel,campaign,readiness.state,body.approved,affiliate.status==='affiliate_ready'?affiliate.id:null,Math.round(current.product.price*100),scoring.score,current.checkedAt,current.available,message,JSON.stringify(readiness.reasons)]);
-    return {...readiness,scoring,message,revalidatedAt:current.checkedAt};
+    const readiness=offerReadiness({product:current.product,scoring,affiliate:resolved,approved:body.approved as boolean,available:current.available,checkedAt:current.checkedAt,channelConfigured:!!activeChannel,last:last?{lastSentAt:last.last_sent_at,lastSentPrice:Number(last.last_sent_price)/100,lastSentScore:last.last_sent_score,verifiedCouponId:last.verified_coupon_id}:null,policy});
+    const message=readiness.state==='ready_to_send'?new MessageComposer().compose({state:'ready_to_send',...current,scoring,affiliate:resolved,template:body.template as MessageTemplate|undefined}):null;
+    const saved=await db.query<{id:string}>(`INSERT INTO offers.distribution_offers (account_id,owner_hash,marketplace,product_id,channel,campaign,state,approved,affiliate_link_id,price_cents,score,revalidated_at,available,message,reasons) VALUES ($1,$2,'mercadolivre',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb) ON CONFLICT (account_id,marketplace,product_id,channel,campaign) DO UPDATE SET owner_hash=EXCLUDED.owner_hash,state=EXCLUDED.state,approved=EXCLUDED.approved,affiliate_link_id=EXCLUDED.affiliate_link_id,price_cents=EXCLUDED.price_cents,score=EXCLUDED.score,revalidated_at=EXCLUDED.revalidated_at,available=EXCLUDED.available,message=EXCLUDED.message,reasons=EXCLUDED.reasons,updated_at=NOW() RETURNING id`,[account,owner,id,channel,campaign,readiness.state,body.approved,affiliate.status==='affiliate_ready'?affiliate.id:null,Math.round(current.product.price*100),scoring.score,current.checkedAt,current.available,message,JSON.stringify(readiness.reasons)]);
+    return {id:saved.rows[0]?.id,...readiness,scoring,message,revalidatedAt:current.checkedAt};
   });
 }
 // A future official transport must call prepareOffer again immediately before send,

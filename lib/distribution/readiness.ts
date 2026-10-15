@@ -1,6 +1,6 @@
 import type { AffiliateResolution, Product } from '../offers/contracts';
 import type { OfferScore } from '../offers/scoring';
-export type OfferState='candidate'|'approved'|'affiliate_pending'|'ready_to_send'|'sent'|'disabled';
+export type OfferState='candidate'|'approved'|'affiliate_pending'|'ready_to_send'|'queued'|'sent'|'expired'|'disabled';
 export interface SendHistory {lastSentAt:Date;lastSentPrice:number;lastSentScore:number;verifiedCouponId?:string|null}
 export interface DistributionPolicy {minimumScore:number;resendHours:number;priceDropPercent:number;scoreIncrease:number}
 export const defaultPolicy:DistributionPolicy={minimumScore:60,resendHours:24,priceDropPercent:5,scoreIncrease:10};

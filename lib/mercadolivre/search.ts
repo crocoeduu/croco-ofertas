@@ -70,6 +70,7 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
   }
   // Catalogue metadata alone is not a price. Read associated listings explicitly.
   // A denied resource stops immediately; never loop through IDs to evade a denial.
+  const overflow:Product[]=[];
   for(const detail of withoutWinner) {
     if(unique.size>=20)break;
     const id=productId(detail.id);
@@ -86,12 +87,14 @@ async function searchCatalog(token:string,q:string,offset:number,signal:AbortSig
       parentBrl:offers.currency_id==='BRL',
     });
     const picture=Array.isArray(detail.pictures)?record(detail.pictures[0]):undefined;
+    let perCatalog=0;
     for(const value of offers.results) {
       const item=record(value);if(!item||(item.status!=null&&item.status!=='active')||item.available_quantity===0)continue;
       const product=normalizeProduct({...item,id:item.item_id??item.id,currency_id:item.currency_id??offers.currency_id,title:item.title??detail.name,permalink:marketUrl(item.permalink)??cataloguePermalink(detail),secure_thumbnail:item.secure_thumbnail??picture?.url});
-      if(product){product.catalogId=id;unique.set(product.id,product);if(unique.size>=20)break;}
+      if(product){product.catalogId=id;if(perCatalog<4){unique.set(product.id,product);perCatalog++;}else overflow.push(product);if(unique.size>=20)break;}
     }
   }
+  for(const product of overflow){if(unique.size>=20)break;if(!unique.has(product.id))unique.set(product.id,product);}
   if(!unique.size&&denied)throw denied;
   if(data.results.length&&!ids.length)throw new AppError('MELI_API_ERROR');
   const priceCoverage={matches:data.results.length,active,winners,priced:unique.size};
@@ -110,6 +113,9 @@ export function normalizeProduct(value: unknown): Product | null {
       permalink, imageUrl: firstProductImage(item.secure_thumbnail,item.thumbnail,...(Array.isArray(item.pictures)?item.pictures.slice(0,4):[])),
       shipping: shipping && typeof shipping.free_shipping === 'boolean' ? { free: shipping.free_shipping } : undefined,
       category: typeof item.category_id === 'string' && /^MLB\d{1,18}$/.test(item.category_id) ? item.category_id : undefined,
+      available: typeof item.available_quantity==='number' && typeof item.status==='string' ? item.status==='active'&&item.available_quantity>0 : undefined,
+      soldQuantity: typeof item.sold_quantity==='number' && Number.isSafeInteger(item.sold_quantity) && item.sold_quantity>=0 ? item.sold_quantity : undefined,
+      catalogId:typeof item.catalog_product_id==='string'&&/^MLB[0-9]{6,18}$/.test(item.catalog_product_id)?item.catalog_product_id:undefined,
       condition: ['new', 'used', 'not_specified'].includes(String(item.condition)) ? item.condition as Product['condition'] : 'not_specified' };
   } catch { return null; }
 }

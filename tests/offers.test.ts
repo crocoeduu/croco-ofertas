@@ -106,7 +106,7 @@ describe('sessão, CSRF e isolamento',()=>{
     for(const body of ['x'.repeat(5000),'[]','invalid']) {const r=new NextRequest('https://example.com/',{method:'POST',headers:{'Content-Type':'application/json'},body});await expect(readOfferBody(r)).rejects.toMatchObject({code:'REQUEST_INVALID'});}
   });
   it('preços e histórico usam owner em todas as consultas',async()=>{
-    const owner='a'.repeat(64);await recordProducts(owner,[product]);expect(mock.query).toHaveBeenCalledTimes(2);for(const [sql,values] of mock.query.mock.calls){expect(sql).toContain('owner_hash');expect(values[0]).toBe(owner);}expect(mock.query.mock.calls[1][0]).toContain('DO NOTHING');
+    const owner='a'.repeat(64);await recordProducts(owner,[product]);expect(mock.query).toHaveBeenCalledTimes(3);for(const [sql,values] of mock.query.mock.calls){expect(sql).toContain('owner_hash');expect(values[0]).toBe(owner);}expect(mock.query.mock.calls[2][0]).toContain('DO NOTHING');expect(mock.query.mock.calls[1][0]).toContain('pg_advisory_xact_lock');
     mock.query.mockReset().mockResolvedValue({rows:[],rowCount:0});await listPriceHistories(owner,[product.id]);await productExists(owner,product.id);for(const [sql,values] of mock.query.mock.calls){expect(sql).toContain('owner_hash=$1');expect(values[0]).toBe(owner);}
   });
 });

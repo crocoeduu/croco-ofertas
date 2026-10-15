@@ -1,0 +1,11 @@
+import {expect,it,vi} from 'vitest';
+vi.mock('@/lib/affiliates/repository',()=>({affiliateAccount:()=> '12345',affiliateQuery:vi.fn()}));
+vi.mock('@/lib/operations/repository',()=>({getSettings:vi.fn(),storedProducts:vi.fn()}));
+import {watchSettings,watchEvents,type WatchRow} from '@/lib/operations/watchlist';
+import {scoreOffer} from '@/lib/offers/scoring';
+import type {StoredProduct} from '@/lib/operations/repository';
+const product:StoredProduct={provider:'mercadolivre',id:'MLB123456789',name:'Produto',price:80,currency:'BRL',permalink:'https://www.mercadolivre.com.br/p/MLB123456789',condition:'new',available:true,updatedAt:new Date().toISOString()};
+const watch:WatchRow={id:'12345678-1234-4123-8123-123456789012',product_id:product.id,target_cents:'9000',minimum_drop:5,minimum_score:60,free_shipping:false,active:true,baseline_cents:'10000',last_checked_at:null,last_error_code:null,failures:0,last_available:false,last_score:0};
+it.each([{product_id:product.id,target:-1},{product_id:product.id,minimumDrop:0},{product_id:product.id,minimumScore:101},{product_id:'bad'},{product_id:product.id,owner:'spoof'},{product_id:product.id,active:'true'}])('valida critérios e recusa identidade fornecida pelo client',input=>expect(()=>watchSettings(input)).toThrow());
+it('gera somente eventos sustentados pela evidência recebida',()=>{const score=scoreOffer(product,[]);const events=watchEvents(watch,product,score,{status:'affiliate_pending'});expect(events).toContain('target');expect(events).toContain('drop');expect(events).toContain('restocked');expect(events).toContain('affiliate_pending');expect(events).not.toContain('opportunity');});
+it('produto indisponível não anuncia atingimento de meta como oportunidade',()=>{const p={...product,available:false};const events=watchEvents(watch,p,scoreOffer(p,[]),{status:'affiliate_pending'});expect(events).toContain('unavailable');expect(events).not.toContain('target');expect(events).not.toContain('opportunity');});

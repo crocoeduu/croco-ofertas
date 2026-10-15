@@ -1,0 +1,16 @@
+import {beforeEach,expect,it,vi} from 'vitest';
+import {AppError} from '@/lib/errors';
+const m=vi.hoisted(()=>({query:vi.fn(),settings:vi.fn(),watches:vi.fn(),revalidate:vi.fn(),record:vi.fn(),histories:vi.fn(),notify:vi.fn(),affiliate:vi.fn()}));
+vi.mock('@/lib/affiliates/repository',()=>({affiliateAccount:()=> '12345',affiliateQuery:m.query}));
+vi.mock('@/lib/affiliates/service',()=>({AffiliateLinkService:class{forProduct=m.affiliate;}}));
+vi.mock('@/lib/operations/repository',()=>({getSettings:m.settings,storedProducts:vi.fn()}));
+vi.mock('@/lib/operations/watchlist',()=>({listWatchlist:m.watches,notifyWatch:m.notify}));
+vi.mock('@/lib/mercadolivre/search',()=>({revalidateMercadoLivre:m.revalidate}));
+vi.mock('@/lib/offers/repository',()=>({recordProducts:m.record,listPriceHistories:m.histories}));
+import {runCollection} from '@/lib/operations/jobs';
+import {safeDefaults} from '@/lib/operations/policy';
+beforeEach(()=>{vi.resetAllMocks();m.settings.mockResolvedValue(safeDefaults);m.query.mockResolvedValue([]);m.watches.mockResolvedValue([{product_id:'MLB123456789',failures:0}]);});
+it('uma lease em uso não inicia nova coleta',async()=>{await expect(runCollection('a'.repeat(64))).rejects.toThrow('JOB_BUSY');expect(m.revalidate).not.toHaveBeenCalled();});
+it('feature flag desativada bloqueia o job antes do banco',async()=>{m.settings.mockResolvedValue({...safeDefaults,watchlistEnabled:false});await expect(runCollection('a'.repeat(64))).rejects.toThrow('AUTOMATION_PAUSED');expect(m.query).not.toHaveBeenCalled();});
+it('sem itens devidos finaliza lease e limpa somente dados expirados',async()=>{m.query.mockImplementation(async(sql:string)=>sql.startsWith('INSERT INTO offers.jobs')?[{name:'collection'}]:[]);const result=await runCollection('a'.repeat(64));expect(result).toMatchObject({processed:0,externalSent:false});expect(m.query.mock.calls.some(([s])=>s.includes('last_finished_at=NOW()'))).toBe(true);expect(m.query.mock.calls.filter(([s])=>s.startsWith('DELETE')).every(([s])=>s.includes('expires_at<NOW()'))).toBe(true);expect(m.revalidate).not.toHaveBeenCalled();});
+it('negação oficial pausa após uma chamada, sem contornar o recurso',async()=>{m.query.mockImplementation(async(sql:string)=>sql.startsWith('INSERT INTO offers.jobs')?[{name:'collection'}]:sql.startsWith('SELECT product_id')?[{product_id:'MLB123456789'}]:sql.startsWith('SELECT 1')?[{}]:[]);m.revalidate.mockRejectedValue(new AppError('MELI_SEARCH_FORBIDDEN'));const result=await runCollection('a'.repeat(64));expect(result.lastError).toBe('MELI_SEARCH_FORBIDDEN');expect(m.revalidate).toHaveBeenCalledTimes(1);expect(m.record).not.toHaveBeenCalled();expect(m.query.mock.calls.some(([s])=>s.includes('watchlistEnabled'))).toBe(true);expect(m.query.mock.calls.some(([s])=>s.includes('failures=failures+1'))).toBe(true);});

@@ -70,11 +70,13 @@ export async function recordAffiliateClick(id: string, requestedChannel?: Affili
 }
 export async function affiliateDashboard() {
   const account=affiliateAccount();
-  const [counts,clicks,products,channels]=await Promise.all([
+  const [counts,clicks,products,channels,campaigns,daily]=await Promise.all([
     affiliateQuery<{status:AffiliateStatus;count:string}>('SELECT status,COUNT(*)::text AS count FROM offers.affiliate_links WHERE account_id=$1 GROUP BY status',[account]),
     affiliateQuery<{count:string}>(`SELECT COUNT(*)::text AS count FROM offers.affiliate_clicks c JOIN offers.affiliate_links l ON l.id=c.affiliate_link_id WHERE l.account_id=$1 AND c.clicked_at>=NOW()-INTERVAL '30 days'`,[account]),
     affiliateQuery<{product_id:string;clicks:string}>(`SELECT c.product_id,COUNT(*)::text AS clicks FROM offers.affiliate_clicks c JOIN offers.affiliate_links l ON l.id=c.affiliate_link_id WHERE l.account_id=$1 AND c.clicked_at>=NOW()-INTERVAL '30 days' GROUP BY c.product_id ORDER BY COUNT(*) DESC LIMIT 10`,[account]),
-    affiliateQuery<{channel:AffiliateChannel;clicks:string}>(`SELECT c.channel,COUNT(*)::text AS clicks FROM offers.affiliate_clicks c JOIN offers.affiliate_links l ON l.id=c.affiliate_link_id WHERE l.account_id=$1 AND c.clicked_at>=NOW()-INTERVAL '30 days' GROUP BY c.channel ORDER BY COUNT(*) DESC`,[account])
+    affiliateQuery<{channel:AffiliateChannel;clicks:string}>(`SELECT c.channel,COUNT(*)::text AS clicks FROM offers.affiliate_clicks c JOIN offers.affiliate_links l ON l.id=c.affiliate_link_id WHERE l.account_id=$1 AND c.clicked_at>=NOW()-INTERVAL '30 days' GROUP BY c.channel ORDER BY COUNT(*) DESC`,[account]),
+    affiliateQuery<{campaign:string;clicks:string}>(`SELECT c.campaign,COUNT(*)::text AS clicks FROM offers.affiliate_clicks c JOIN offers.affiliate_links l ON l.id=c.affiliate_link_id WHERE l.account_id=$1 AND c.clicked_at>=NOW()-INTERVAL '30 days' GROUP BY c.campaign ORDER BY COUNT(*) DESC`,[account]),
+    affiliateQuery<{day:string;clicks:string}>(`SELECT to_char(c.clicked_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS day,COUNT(*)::text AS clicks FROM offers.affiliate_clicks c JOIN offers.affiliate_links l ON l.id=c.affiliate_link_id WHERE l.account_id=$1 AND c.clicked_at>=NOW()-INTERVAL '30 days' GROUP BY day ORDER BY day`,[account])
   ]);
-  return {counts:Object.fromEntries(counts.map(row=>[row.status,Number(row.count)])),clicks:Number(clicks[0]?.count??0),products:products.map(row=>({...row,clicks:Number(row.clicks)})),channels:channels.map(row=>({...row,clicks:Number(row.clicks)}))};
+  return {campaigns:campaigns.map(row=>({...row,clicks:Number(row.clicks)})),daily:daily.map(row=>({...row,clicks:Number(row.clicks)})),counts:Object.fromEntries(counts.map(row=>[row.status,Number(row.count)])),clicks:Number(clicks[0]?.count??0),products:products.map(row=>({...row,clicks:Number(row.clicks)})),channels:channels.map(row=>({...row,clicks:Number(row.clicks)}))};
 }

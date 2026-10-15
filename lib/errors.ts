@@ -1,5 +1,11 @@
 import 'server-only';
 export const errors = {
+  AUTOMATION_PAUSED:{status:409,message:'Automação pausada no servidor. Revise Configurações para habilitar a simulação.'},
+  DISTRIBUTION_WINDOW:{status:409,message:'Fora da janela de distribuição configurada (horário de São Paulo).'},
+  DISTRIBUTION_LIMIT:{status:429,message:'Limite de frequência atingido. Aguarde o intervalo configurado.'},
+  QUEUE_CONFLICT:{status:409,message:'Este item já foi processado, está em uso ou atingiu o limite de tentativas.'},
+  PROVIDER_NOT_CONFIGURED:{status:409,message:'Transporte oficial ainda não configurado. Apenas simulação está disponível.'},
+  JOB_BUSY:{status:409,message:'Coleta já em execução ou realizada recentemente.'},
   ADMIN_REQUIRED: { status: 403, message: 'Esta operação exige a conta administradora autorizada.' },
   AFFILIATE_INVALID: { status: 400, message: 'Revise o produto, URL HTTPS oficial, canal e confirmação de titularidade.' },
   AFFILIATE_DUPLICATE: { status: 409, message: 'Já existe um link com este produto, canal e etiqueta. Edite o cadastro existente.' },

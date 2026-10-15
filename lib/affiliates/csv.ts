@@ -23,6 +23,7 @@ export function previewAffiliateCsv(csv: unknown, existingKeys: Set<string>): {r
   const seen=new Set<string>();const inputs:AffiliateInput[]=[];
   const rows=parseAffiliateCsv(csv).map((values,index):CsvPreviewRow=>{
     try {
+      if(Object.values(values).some(value=>/^[\s]*[=+@-]/.test(value)))throw new AppError('CSV_INVALID');
       const input=validateAffiliate({...values,status:'pending'});const key=affiliateKey(input);
       if (seen.has(key)||existingKeys.has(key))return {line:index+2,values,state:'duplicate',message:'Produto, canal e etiqueta já cadastrados ou repetidos no CSV.'};
       seen.add(key);inputs.push(input);return {line:index+2,values,state:'valid',message:'Será cadastrado como pendente; confirme titularidade no painel.'};
