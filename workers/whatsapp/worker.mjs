@@ -2,7 +2,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {mkdir,readFile,writeFile,rename,statfs} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {recordHealth} from './health.mjs';
-import {EncryptedStore} from './encrypted-store.mjs';
+import {EncryptedStore,clearEncryptedSessions} from './encrypted-store.mjs';
 import {transparentAuthClass} from './transparent-auth.mjs';
 import {signedRequest,validTask,imageBytes} from './protocol.mjs';
 // This service is deliberately outside Next.js. It never receives DB or Mercado Livre credentials.
@@ -20,7 +20,7 @@ async function cachedImage(url){for(const [k,v] of mediaCache)if(v.expires<Date.
 const journal=resolve(persistent,'delivery-journal.json');let completed={};try{completed=JSON.parse(await readFile(journal,'utf8'));}catch(e){if(e.code!=='ENOENT')throw Error('DELIVERY_JOURNAL_INVALID',{cause:e});}
 async function remember(id,receipt){completed[id]=receipt;await writeFile(journal+'.tmp',JSON.stringify(completed),{mode:0o600});await rename(journal+'.tmp',journal);}
 async function api(body){const {raw,headers}=signedRequest({...body,worker_id:workerId},secret);const r=await fetch(endpoint,{method:'POST',headers,body:raw,redirect:'error',signal:AbortSignal.timeout(60000)});if(!r.ok)throw Error('CROCO_REQUEST_FAILED');return r.json();}
-async function destroy(remove=false){if(client){if(remove)await client.logout().catch(()=>{});await client.destroy().catch(()=>{});client=undefined;}status='disconnected';destinations=[];qrPng=undefined;accountMask='';}
+async function destroy(remove=false){if(client){if(remove)await client.logout().catch(()=>{});await client.destroy().catch(()=>{});client=undefined;}if(remove)await clearEncryptedSessions(persistent);status='disconnected';destinations=[];qrPng=undefined;accountMask='';}
 async function connect(resumeOnly=false){
  if(client||process.env.WHATSAPP_WEB_SESSION_ENABLED!=='true')return;
  if(runtime===persistent||process.platform!=='linux'||Number((await statfs(runtime)).type)!==0x01021994)throw Error('RUNTIME_TMPFS_REQUIRED');

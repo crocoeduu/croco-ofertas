@@ -19,3 +19,8 @@ test('healthcheck distingue heartbeat recente de falha, restart e arquivo ausent
  const {recordHealth,healthy}=await import('./health.mjs');const dir=await mkdtemp(join(tmpdir(),'croco-health-'));
  try{assert.equal(await healthy(dir,now),false);await recordHealth(dir,'connected',now);assert.equal(await healthy(dir,now+1000),true);assert.equal(await healthy(dir,now+90001),false);await recordHealth(dir,'stopped',now);assert.equal(await healthy(dir,now),false);}finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('apagar sessão remove arquivos cifrados mesmo sem cliente conectado e preserva recibos',async()=>{
+ const {clearEncryptedSessions}=await import('./encrypted-store.mjs');const dir=await mkdtemp(join(tmpdir(),'croco-delete-'));
+ try{const file=join(dir,'a'.repeat(64)+'.enc');await writeFile(file,'cipher-fixture');await writeFile(join(dir,'delivery-journal.json'),'{}');await clearEncryptedSessions(dir);await assert.rejects(readFile(file));assert.equal(await readFile(join(dir,'delivery-journal.json'),'utf8'),'{}');}finally{await rm(dir,{recursive:true,force:true});}
+});

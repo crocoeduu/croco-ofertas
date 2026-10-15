@@ -57,3 +57,47 @@ As evidências finais de CI, SHA e deploy devem ser consultadas no histórico Gi
 ## Sequência que depende do administrador
 
 Confirmar hospedagem compatível → contratar por conta própria → injetar secrets nos painéis → iniciar worker/preflight → escanear QR → escolher ID do grupo público e declarar permissão → cadastrar/ativar link oficial no canal correto → aprovar preview/DRY RUN → parar. Somente após “pode enviar o primeiro teste”, habilitar um teste neutro único. Confirmar recebimento e aguardar autorização separada da automação. Nesta implantação WHATSAPP_SEND_ENABLED/AUTO_SEND_ENABLED continuam bloqueados.
+
+```mermaid
+flowchart TD
+  ML["Mercado Livre ✅"] --> Radar["Radar ✅"]
+  Radar --> Score["Histórico / Score ✅"]
+  Score --> Approval["Aprovação ✅"]
+  Approval --> Affiliate["AffiliateLinkService ✅ · link ativo por canal 🟡"]
+  Affiliate --> Composer["MessageComposer ✅"]
+  Composer --> Queue["Supabase Queue ✅ · DRY RUN"]
+  Queue --> Worker["Worker implementado ✅ · hospedagem 🟡"]
+  Worker --> Provider["Web Session NÃO OFICIAL 🟡 · QR pendente"]
+  Provider --> Group["Grupo público 🟡 · seleção e teste pendentes"]
+```
+
+## Referência do relatório de entrega
+
+| # | Item | Resultado / onde consultar |
+| --- | --- | --- |
+| 1 | Recuperação | Workspace recuperado; nenhum diff descartado |
+| 2 | Arquivos | Lista exata no diff do commit; grupos descritos acima |
+| 3 | Migration | Journal real confirmado; nenhuma reaplicação |
+| 4 | Testes | npm ci, lint, typecheck, backend, worker, build, smoke, security e audits; UI em CI |
+| 5 | Quantidade | 294 backend; 8 worker; 72 cenários UI previstos em CI; só considerar os efetivamente aprovados no run da entrega |
+| 6 | Security | Scanner inclui arquivos e bundle; valores de teste não são credenciais reais |
+| 7 | Audit | Auditorias root/worker separadas, sem vulnerabilidades na validação local |
+| 8 | Commit | SHA final no resumo de entrega e histórico Git |
+| 9 | Main | Atualizada somente após validação; sem force push |
+| 10 | Deployment | ID e resultado real no resumo de entrega/Vercel |
+| 11 | Alias | croco-ofertas.vercel.app deve ser confirmado no deploy publicado |
+| 12 | Runtime Logs | Evidência pós-deploy no resumo; não confundir com build logs |
+| 13 | Provider | Web Session opcional, com Mock para desenvolvimento/CI |
+| 14 | Oficial | Web Session NÃO OFICIAL; Cloud/Groups separados e indisponíveis nesta configuração |
+| 15 | Worker | Implementado, separado das Functions; ainda sem host contratado |
+| 16 | RAM | 1 GB para piloto segundo Vertra; compose 2 GB como margem, sem medição conectado |
+| 17 | Navegador | Chromium e Puppeteer, sandbox ativo |
+| 18 | Docker | Dockerfile e compose prontos; execução da imagem depende do host compatível |
+| 19 | Storage | Volume cifrado persistente obrigatório; sessão legível só em tmpfs |
+| 20 | Comandos | npm ci --omit=dev --ignore-scripts; npm run preflight; npm start; npm run healthcheck |
+| 21 | Variáveis | Somente nomes e locais no README do worker; secrets fora do Git/chat |
+| 22 | WhatsApp | Sem conta real conectada nesta retomada |
+| 23 | Worker online | Não hospedado; não alegar heartbeat de um serviço inexistente |
+| 24 | Destino | Não selecionado/verificado; exige conta conectada e declaração administrativa |
+| 25 | DRY RUN | Ciclo integrado com fixtures/Mock sem mensagens externas; SQL real validado separadamente |
+| 26 | Ações restantes | Host compatível, secrets, QR, destino, link ativo e autorização específica do primeiro teste; automação exige outra autorização |
