@@ -18,7 +18,8 @@
     "security:check": "node scripts/security-check.mjs",
     "db:check": "node --env-file-if-exists=.env.local scripts/check-database.mjs",
     "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:worker": "npm --prefix workers/whatsapp test"
   },
   "dependencies": {
     "next": "16.4.0",

@@ -1,0 +1,6 @@
+.env*
+node_modules
+*.enc
+.wwebjs_auth
+.wwebjs_cache
+delivery-journal.json

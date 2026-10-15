@@ -15,4 +15,4 @@ export type AffiliateResolution = { status: 'affiliate_ready'; id: string; affil
 export interface AffiliateLinkProvider { resolve(product: Product, channel: AffiliateChannel, label?: string): Promise<AffiliateResolution> }
 export interface AffiliateLinkService { forProduct(product: Product, channel: AffiliateChannel, label?: string): Promise<AffiliateResolution> }
 export interface CouponService { find(product: Product): Promise<Array<{ code: string; expiresAt?: Date; verified: boolean }>> }
-export interface DistributionProvider { send(offer: { product: Product; affiliateUrl: string }, destinationId: string): Promise<void> }
+export interface DistributionProvider<Offer={product:Product;affiliateUrl:string},Receipt=void,Destination=string> {send(offer:Offer,destination:Destination,idempotencyKey:string):Promise<Receipt>}

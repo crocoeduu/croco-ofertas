@@ -9,10 +9,11 @@ import type { AffiliateChannel, ProviderId } from '../offers/contracts';
 export interface AffiliateLink {
   id: string; marketplace: ProviderId; product_id: string; original_url: string; affiliate_url: string;
   channel: AffiliateChannel; label: string; notes: string; status: AffiliateStatus;
+  source?:'generator'|'affiliate_bar'|'other'; verification_source?:string; confirmed_at?:string|null; confirmed_by?:string|null;
   own_link_confirmed: boolean; provenance: 'administrator_registered'; verified_at: string | null;
   last_checked_at: string; created_at: string; updated_at: string;
 }
-const fields = 'id,marketplace,product_id,original_url,affiliate_url,channel,label,notes,status,own_link_confirmed,provenance,verified_at::text AS verified_at,last_checked_at::text AS last_checked_at,created_at::text AS created_at,updated_at::text AS updated_at';
+const fields = 'source,verification_source,confirmed_at::text,confirmed_by::text,id,marketplace,product_id,original_url,affiliate_url,channel,label,notes,status,own_link_confirmed,provenance,verified_at::text AS verified_at,last_checked_at::text AS last_checked_at,created_at::text AS created_at,updated_at::text AS updated_at';
 export async function affiliateQuery<T extends import('pg').QueryResultRow>(sql: string, values: unknown[] = []): Promise<T[]> {
   const db = getDatabase(); if (!db) throw new AppError('STORAGE_ERROR');
   try { return (await db.query<T>(sql,values)).rows; } catch (error) {
@@ -38,8 +39,8 @@ export async function saveAffiliateLink(input: AffiliateInput, id?: string, expe
   const values=[affiliateAccount(),input.marketplace,input.productId,input.originalUrl,input.affiliateUrl,input.channel,input.label,input.notes,input.status,input.ownLinkConfirmed];
   if (id && (!expectedUpdatedAt || !Number.isFinite(Date.parse(expectedUpdatedAt)))) throw new AppError('AFFILIATE_CONFLICT');
   // IDs already shared in cards/messages must never be repointed to another product/channel/campaign.
-  const rows=await affiliateQuery<AffiliateLink>(id ? `UPDATE offers.affiliate_links SET original_url=$4,affiliate_url=$5,notes=$8,status=$9,own_link_confirmed=$10,verified_at=CASE WHEN $9='verified' THEN NOW() ELSE NULL END,last_checked_at=NOW(),updated_at=NOW() WHERE account_id=$1 AND id=$11 AND updated_at=$12::timestamptz AND marketplace=$2 AND product_id=$3 AND channel=$6 AND label=$7 RETURNING ${fields}` :
-    `INSERT INTO offers.affiliate_links (account_id,marketplace,product_id,original_url,affiliate_url,channel,label,notes,status,own_link_confirmed,verified_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,CASE WHEN $9='verified' THEN NOW() ELSE NULL END) RETURNING ${fields}`,id ? [...values,affiliateId(id),expectedUpdatedAt] : values);
+  const rows=await affiliateQuery<AffiliateLink>(id ? `UPDATE offers.affiliate_links SET original_url=$4,affiliate_url=$5,notes=$8,status=$9,own_link_confirmed=$10,verified_at=CASE WHEN $9='verified' THEN NOW() ELSE NULL END,last_checked_at=NOW(),updated_at=NOW(),source=$11,verification_source=CASE WHEN $10 THEN CASE WHEN $11='generator' THEN 'official_generator_declared' ELSE 'administrator_declared' END ELSE NULL END,confirmed_at=CASE WHEN $10 THEN NOW() ELSE NULL END,confirmed_by=CASE WHEN $10 THEN $1::bigint ELSE NULL END WHERE account_id=$1 AND id=$12 AND updated_at=$13::timestamptz AND marketplace=$2 AND product_id=$3 AND channel=$6 AND label=$7 RETURNING ${fields}` :
+    `INSERT INTO offers.affiliate_links (account_id,marketplace,product_id,original_url,affiliate_url,channel,label,notes,status,own_link_confirmed,verified_at,source,verification_source,confirmed_at,confirmed_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,CASE WHEN $9='verified' THEN NOW() ELSE NULL END,$11,CASE WHEN $10 THEN CASE WHEN $11='generator' THEN 'official_generator_declared' ELSE 'administrator_declared' END ELSE NULL END,CASE WHEN $10 THEN NOW() ELSE NULL END,CASE WHEN $10 THEN $1::bigint ELSE NULL END) RETURNING ${fields}`,id ? [...values,input.source??'other',affiliateId(id),expectedUpdatedAt] : [...values,input.source??'other']);
   if (!rows[0]) throw new AppError('AFFILIATE_CONFLICT');
   return rows[0];
 }

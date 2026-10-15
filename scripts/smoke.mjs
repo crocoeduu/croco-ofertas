@@ -18,9 +18,10 @@ try {
   const health=await request('/api/health');assert.deepEqual(await health.json(),{status:'ok'});
   const radar=await request('/radar');assert.equal(radar.status,200);const radarHtml=await radar.text();assert(radarHtml.includes('Acesso administrativo'));assert(sentinels.every(secret=>!radarHtml.includes(secret)));
   const affiliates=await request('/afiliados');assert.equal(affiliates.status,200);const affiliatesHtml=await affiliates.text();assert(affiliatesHtml.includes('Acesso administrativo'));assert(sentinels.every(secret=>!affiliatesHtml.includes(secret)));assert(!affiliatesHtml.includes('Minha URL afiliada oficial'));
-  for(const path of ['/api/admin/affiliates','/api/admin/distribution','/api/admin/workspace'])assert.equal((await request(path)).status,401);
-  for(const path of ['/dashboard','/monitoramento','/ofertas','/distribuicao','/configuracoes','/cupons']){const page=await request(path);assert.equal(page.status,200);const body=await page.text();assert(body.includes('Acesso administrativo'));assert(!body.includes('PAUSAR AUTOMAÇÃO'));assert(sentinels.every(secret=>!body.includes(secret)));}
+  for(const path of ['/api/admin/affiliates','/api/admin/distribution','/api/admin/workspace','/api/admin/whatsapp','/api/admin/whatsapp/qr'])assert.equal((await request(path)).status,401);
+  for(const path of ['/dashboard','/monitoramento','/ofertas','/distribuicao','/configuracoes','/cupons','/configuracoes/whatsapp']){const page=await request(path);assert.equal(page.status,200);const body=await page.text();assert(body.includes('Acesso administrativo'));assert(!body.includes('PAUSAR AUTOMAÇÃO'));assert(sentinels.every(secret=>!body.includes(secret)));}
   assert.equal((await request('/api/jobs/collection')).status,403);
+  const worker=await fetch(`http://127.0.0.1:${port}/api/internal/whatsapp/worker`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'poll',worker_id:'test'})});assert.equal(worker.status,403);
   const forbiddenAffiliate=await fetch(`http://127.0.0.1:${port}/api/admin/affiliates`,{method:'POST',headers:{Origin:'https://evil.example','Content-Type':'application/json'},body:'{}'});assert.equal(forbiddenAffiliate.status,403);
   const openRedirect=await request('/go/mercadolivre/12345678-1234-4123-8123-123456789012?url=https://evil.example');assert.equal(openRedirect.status,400);assert.equal(openRedirect.headers.get('location'),null);
   assert.equal((await request('/go/mercadolivre/invalid-id')).status,404);

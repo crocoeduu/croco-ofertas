@@ -5,9 +5,10 @@ import { findProductLinks, type AffiliateLink } from './repository';
 
 export function selectAffiliateLink(links: AffiliateLink[], product: Product, channel: AffiliateChannel, label = ''): AffiliateResolution {
   affiliateChannel(channel); campaignLabel(label);
-  const eligible=links.filter(link=>link.marketplace===product.provider && link.product_id===product.id && link.status==='verified' && link.own_link_confirmed && !!link.verified_at && (label ? link.label===label : true));
-  const choose=(selectedChannel:AffiliateChannel)=>{const matches=eligible.filter(link=>link.channel===selectedChannel);return matches.find(link=>link.label===label)??(!label&&matches.length===1?matches[0]:undefined);};
-  const selected=choose(channel) ?? choose('generic');
+  const eligible=links.filter(link=>link.marketplace===product.provider && link.product_id===product.id && link.status==='verified' && link.own_link_confirmed && !!link.verified_at);
+  // Exact campaign, channel default, then compatible generic. Never borrow another campaign.
+  const find=(ch:AffiliateChannel,campaign:string)=>eligible.find(link=>link.channel===ch&&link.label===campaign);
+  const selected=find(channel,label)??find(channel,'')??find('generic',label)??find('generic','');
   if (!selected) return {status:'affiliate_pending'};
   try { officialAffiliateUrl(selected.affiliate_url); } catch { return {status:'affiliate_pending'}; }
   return {status:'affiliate_ready',id:selected.id,affiliateUrl:selected.affiliate_url,clickPath:`/go/mercadolivre/${selected.id}${selected.channel==='generic'?`?channel=${channel}`:''}`,channel,label:selected.label,provenance:'administrator_registered'};

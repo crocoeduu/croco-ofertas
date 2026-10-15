@@ -69,7 +69,7 @@ export function runSecurityCheck(root = process.cwd()) {
   const example = resolve(root, '.env.example');
   if (existsSync(example) && readFileSync(example, 'utf8').split(/\r?\n/).some(line => /^[A-Z_]+=.+/.test(line))) problems.push('.env.example: deve conter somente valores vazios');
   // Search built client output for configured secrets, without printing the values.
-  const secrets = ['MELI_CLIENT_SECRET', 'MELI_ACCESS_TOKEN', 'MELI_REFRESH_TOKEN', 'TOKEN_ENCRYPTION_KEY', 'DATABASE_URL'].map(key => process.env[key]).filter(value => value && value.length >= 8);
+  const secrets = ['MELI_CLIENT_SECRET', 'MELI_ACCESS_TOKEN', 'MELI_REFRESH_TOKEN', 'TOKEN_ENCRYPTION_KEY', 'DATABASE_URL','WHATSAPP_WORKER_SECRET','WHATSAPP_SESSION_ENCRYPTION_KEY','WHATSAPP_CLOUD_ACCESS_TOKEN','WHATSAPP_WEBHOOK_APP_SECRET'].map(key => process.env[key]).filter(value => value && value.length >= 8);
   const built = resolve(root, '.next/static');
   if (existsSync(built)) {
     const walk = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? walk(resolve(dir, entry.name)) : [resolve(dir, entry.name)]);

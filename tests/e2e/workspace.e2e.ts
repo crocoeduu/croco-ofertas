@@ -32,11 +32,20 @@ test('cadastro a partir do produto preenche identificador e anúncio, sem fingir
 test('aprovada sem afiliado continua pendente e não gera mensagem de envio',async({page})=>{
  await page.goto('/ofertas?product_id='+id);await page.getByLabel(/Aprovo esta oferta/).check();await page.getByRole('button',{name:'Revalidar e preparar'}).click();await expect(page.getByRole('status')).toContainText('Afiliado pendente');await expect(page.getByRole('button',{name:'Copiar mensagem + link'})).toHaveCount(0);expect(await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1&&e.getBoundingClientRect().width>0&&!e.closest('.history-scroll')).map(e=>({tag:e.tagName,cls:e.className,text:e.textContent?.slice(0,80),width:e.getBoundingClientRect().width})).slice(0,6))).toEqual([]);
 });
-for(const path of ['/dashboard','/monitoramento','/distribuicao','/configuracoes','/cupons'])test(`layout sem overflow e navegação acessível em ${path}`,async({page})=>{
+for(const path of ['/dashboard','/monitoramento','/distribuicao','/configuracoes','/cupons','/configuracoes/whatsapp'])test(`layout sem overflow e navegação acessível em ${path}`,async({page})=>{
  await page.goto(path);await expect(page.getByRole('navigation',{name:'Navegação principal'})).toBeVisible();expect(await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1&&e.getBoundingClientRect().width>0&&!e.closest('.history-scroll')).map(e=>({tag:e.tagName,cls:e.className,text:e.textContent?.slice(0,80),width:e.getBoundingClientRect().width})).slice(0,6))).toEqual([]);await expect(page.getByRole('heading',{name:'Ambiente de testes'})).toBeVisible();
  if(path==='/distribuicao')await expect(page.getByText('DRY RUN ativo · nenhum envio externo')).toBeVisible();
 });
 
 test('fila solicita revalidação e mostra confirmação explícita de dry run',async({page})=>{
  await page.goto('/distribuicao?ready=1');const request=page.waitForRequest(r=>r.url().endsWith('/api/admin/workspace')&&r.postDataJSON().action==='simulate');await page.getByRole('button',{name:'Revalidar e simular envio'}).click();expect((await request).postDataJSON().id).toBe('12345678-1234-4123-8123-123456789012');await expect(page.getByRole('status')).toContainText('nenhum envio externo ocorreu');
+});
+
+test('WhatsApp deixa conexão não oficial explícita e primeiro envio bloqueado',async({page})=>{
+ await page.goto('/configuracoes/whatsapp');await expect(page.getByRole('heading',{name:'Conexão e provider'})).toBeVisible();await expect(page.getByText('NÃO OFICIAL',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Conectar WhatsApp',exact:true})).toBeDisabled();await page.getByLabel('Autorização do primeiro teste').fill('pode enviar o primeiro teste');await expect(page.getByRole('button',{name:'Autorizar uma mensagem de teste'})).toBeDisabled();await expect(page.getByRole('button',{name:'Ativar automação após teste confirmado'})).toBeDisabled();
+});
+test('prévia WhatsApp preserva meli.la e anúncio sem liberar fila sem destino',async({page})=>{
+ const text='🔥 Mouse de teste\n\nR$ 80,00\n\nhttps://meli.la/ABC123\n\n(anúncio)';
+ await page.route('**/api/admin/whatsapp',async route=>{const body=route.request().postDataJSON();expect(body.action).toBe('preview');await route.fulfill({json:{payload:{text,template:'simple',affiliateUrl:'https://meli.la/ABC123',productId:id,price:80,score:80,checkedAt:new Date().toISOString(),advertising:true,mediaFailureBehavior:'send_text_only'},reasons:[],dryRun:true,externalSent:false}});});
+ await page.goto('/configuracoes/whatsapp');await page.getByLabel('Oferta preparada para WhatsApp').selectOption('12345678-1234-4123-8123-123456789012');await page.getByRole('button',{name:'Revalidar e pré-visualizar'}).click();await expect(page.getByRole('article',{name:'Prévia exata da mensagem'})).toContainText('https://meli.la/ABC123');await expect(page.getByRole('article',{name:'Prévia exata da mensagem'})).toContainText('(anúncio)');await expect(page.getByRole('button',{name:'Colocar na fila em DRY RUN'})).toBeDisabled();
 });

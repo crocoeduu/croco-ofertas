@@ -21,7 +21,7 @@ export function effectiveSettings(config:Record<string,unknown>):Settings {
  // No environment value can turn on a not-yet-configured external sender.
  return {...settings,dryRun:true,whatsappEnabled:false,autoApprovalEnabled:false};
 }
-export function withinWindow(settings:Settings,now=new Date()):boolean {
+export function withinWindow(settings:Pick<Settings,'windowStart'|'windowEnd'>,now=new Date()):boolean {
  const hour=Number(new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',hour:'numeric',hourCycle:'h23'}).format(now));
  return hour>=settings.windowStart&&hour<settings.windowEnd;
 }

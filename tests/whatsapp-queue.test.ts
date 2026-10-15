@@ -1,0 +1,22 @@
+import {beforeEach,it,expect,vi} from 'vitest';
+const m=vi.hoisted(()=>({query:vi.fn(),tx:vi.fn(),account:vi.fn(),preview:vi.fn()}));
+vi.mock('@/lib/rate-limit',()=>({PostgresRateLimit:class {async consume(){return true;}}}));
+vi.mock('@/lib/database',()=>({transaction:async(fn:(db:{query:typeof m.tx})=>Promise<unknown>)=>fn({query:m.tx})}));
+vi.mock('@/lib/affiliates/repository',()=>({affiliateAccount:()=> '12345',affiliateQuery:m.query}));
+vi.mock('@/lib/whatsapp/configuration',()=>({accountConfig:m.account}));
+import {claimDelivery} from '@/lib/whatsapp/delivery';
+import {authorizeFirstTest,finishTask,authorizeHandoff} from '@/lib/whatsapp/dispatch';
+import {authenticateWorker} from '@/lib/whatsapp/worker-auth';
+import {NextRequest} from 'next/server';
+import {createHmac} from 'node:crypto';
+const id='12345678-1234-4123-8123-123456789012';
+beforeEach(()=>{vi.resetAllMocks();m.query.mockResolvedValue([]);m.tx.mockResolvedValue({rows:[],rowCount:0});m.account.mockResolvedValue({enabled:true,last_seen_at:new Date().toISOString()});});
+it('worker offline mantém itens na fila sem claim',async()=>{m.account.mockResolvedValue({enabled:true,last_seen_at:new Date(Date.now()-100000).toISOString()});expect(await claimDelivery('worker')).toBeNull();expect(m.tx).not.toHaveBeenCalled();});
+it('claim usa lock, SKIP LOCKED e token; envio incerto nunca volta à fila',async()=>{await claimDelivery('worker');const sql=m.tx.mock.calls.map(c=>c[0] as string);expect(sql[0]).toContain('pg_advisory_xact_lock');expect(sql.find(s=>s.includes('WITH picked'))).toContain('FOR UPDATE OF q SKIP LOCKED');expect(sql.find(s=>s.includes('WITH picked'))).toContain('claim_token=$3');expect(sql.find(s=>s.includes("state='sending'"))).toContain("last_error_code='DELIVERY_AMBIGUOUS'");expect(sql.find(s=>s.includes("state='queued'"))).toContain("state IN('claimed','validating')");});
+it('recibo repetido não cria segundo snapshot',async()=>{await finishTask('worker',{action:'result',worker_id:'worker',id,kind:'offer',success:true,provider_message_id:'mock-id'});expect(m.tx.mock.calls.some(c=>(c[0] as string).includes('INSERT INTO offers.delivery_snapshots'))).toBe(false);expect(m.tx.mock.calls[0][0]).toContain("state='sending'");});
+it('primeiro teste bem sucedido registra teste, mantendo automação pausada',async()=>{m.tx.mockResolvedValueOnce({rows:[{destination_id:id}],rowCount:1});await finishTask('worker',{action:'result',worker_id:'worker',id,kind:'test',success:true,provider_message_id:'mock-id'});expect(m.tx.mock.calls.some(c=>(c[0] as string).includes('last_test_at=NOW()'))).toBe(true);expect(m.tx.mock.calls.some(c=>(c[0] as string).includes('paused=TRUE'))).toBe(true);});
+it('resultado incerto pausa e exige revisão sem registrar uma venda ou entrega',async()=>{await finishTask('worker',{action:'result',worker_id:'worker',id,kind:'offer',success:false});expect(m.tx.mock.calls[0][1]).toEqual(['12345',id,'worker','failed',null]);expect(m.tx.mock.calls.some(c=>(c[0] as string).includes('paused=TRUE'))).toBe(true);});
+it('autorizar primeiro teste exige a frase exata e flag explícita',async()=>{vi.stubEnv('WHATSAPP_SEND_ENABLED','false');await expect(authorizeFirstTest('pode enviar o primeiro teste')).rejects.toThrow('AUTOMATION_PAUSED');expect(m.tx).not.toHaveBeenCalled();vi.unstubAllEnvs();});
+it('nonce já consumido impede repetição de requisição assinada',async()=>{const body={action:'poll',worker_id:'worker'},time=String(Date.now()),secret='a'.repeat(64);vi.stubEnv('WHATSAPP_WORKER_SECRET',secret);const signature='v1='+createHmac('sha256',Buffer.from(secret,'hex')).update(`POST\n/api/internal/whatsapp/worker\n${time}\n${id}\n${JSON.stringify(body)}`).digest('hex');const r=new NextRequest('https://example.com/api/internal/whatsapp/worker',{method:'POST',headers:{'x-croco-timestamp':time,'x-croco-nonce':id,'x-croco-signature':signature}});await expect(authenticateWorker(r,body)).rejects.toThrow('REQUEST_FORBIDDEN');expect(m.query.mock.calls[0][0]).toContain('ON CONFLICT DO NOTHING');vi.unstubAllEnvs();});
+
+it('kill switch bloqueia handoff mesmo de tarefa já reservada',async()=>{vi.stubEnv('WHATSAPP_SEND_ENABLED','false');expect(await authorizeHandoff('worker',{action:'handoff',worker_id:'worker',id,kind:'offer'})).toEqual({allowed:false});expect(m.query).not.toHaveBeenCalled();vi.unstubAllEnvs();});

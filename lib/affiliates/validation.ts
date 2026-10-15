@@ -4,7 +4,7 @@ import type { AffiliateChannel, ProviderId } from '../offers/contracts';
 export type AffiliateStatus = 'verified' | 'pending' | 'invalid' | 'disabled';
 export interface AffiliateInput {
   marketplace: ProviderId; productId: string; originalUrl: string; affiliateUrl: string;
-  channel: AffiliateChannel; label: string; notes: string; status: AffiliateStatus; ownLinkConfirmed: boolean;
+  channel: AffiliateChannel; label: string; notes: string; status: AffiliateStatus; ownLinkConfirmed: boolean; source?: 'generator' | 'affiliate_bar' | 'other';
 }
 export const channels: AffiliateChannel[] = ['site','whatsapp','instagram','telegram','generic'];
 export function affiliateId(value: unknown): string {
@@ -27,8 +27,10 @@ function httpsUrl(value: unknown, allowHash=false): URL {
 }
 export function officialAffiliateUrl(value: unknown): string {
   const url = httpsUrl(value);
-  // Accept only the official short-link form, never a normal listing with invented parameters.
-  if (!['mercadolivre.com','www.mercadolivre.com','mercadolivre.com.br','www.mercadolivre.com.br'].includes(url.hostname) || !/^\/sec\/[A-Za-z0-9]{6,40}$/.test(url.pathname) || url.search) throw new AppError('AFFILIATE_INVALID');
+  // Syntax only. Ownership and product binding require a separate administrator declaration.
+  const meliLa = /^https:\/\/meli\.la\/[A-Za-z0-9]{6,40}$/.test(value as string);
+  const sec = ['mercadolivre.com','www.mercadolivre.com','mercadolivre.com.br','www.mercadolivre.com.br'].includes(url.hostname) && /^\/sec\/[A-Za-z0-9]{6,40}$/.test(url.pathname);
+  if ((!meliLa && !sec) || url.search) throw new AppError('AFFILIATE_INVALID');
   return value as string; // Keep the administrator's exact official URL intact.
 }
 // A product binding is evidence about the destination, never proof of affiliate ownership.
@@ -62,12 +64,14 @@ export function registeredAffiliateUrl(value:unknown,id:string,status:AffiliateS
  }
 }
 export function validateAffiliate(body: Record<string, unknown>, trustedCatalogId?:string): AffiliateInput {
-  const keys = ['marketplace','product_id','original_url','affiliate_url','channel','label','notes','status','own_link_confirmed','updated_at'];
+  const keys = ['marketplace','product_id','original_url','affiliate_url','channel','label','notes','status','own_link_confirmed','updated_at','source'];
   if (Object.keys(body).some(key=>!keys.includes(key)) || body.marketplace !== 'mercadolivre' || typeof body.product_id !== 'string' || !/^MLB[0-9]{6,18}$/.test(body.product_id)) throw new AppError('AFFILIATE_INVALID');
+  const source=body.source??'other';
+  if(!['generator','affiliate_bar','other'].includes(source as string))throw new AppError('AFFILIATE_INVALID');
   const status = body.status ?? 'pending';
   if (!['verified','pending','invalid','disabled'].includes(status as string) || (status === 'verified' && body.own_link_confirmed !== true)) throw new AppError('AFFILIATE_INVALID');
   const notes = body.notes ?? ''; if (typeof notes !== 'string' || notes.length > 1000 || [...notes].some(char=>char.charCodeAt(0)<9)) throw new AppError('AFFILIATE_INVALID');
   return { marketplace:'mercadolivre', productId:body.product_id, originalUrl:originalProductUrl(body.original_url,body.product_id,trustedCatalogId), affiliateUrl:registeredAffiliateUrl(body.affiliate_url,body.product_id,status as AffiliateStatus,trustedCatalogId),
-    channel:affiliateChannel(body.channel),label:campaignLabel(body.label ?? ''),notes,status:status as AffiliateStatus,ownLinkConfirmed:body.own_link_confirmed === true };
+    channel:affiliateChannel(body.channel),label:campaignLabel(body.label ?? ''),notes,status:status as AffiliateStatus,ownLinkConfirmed:body.own_link_confirmed === true,source:source as AffiliateInput['source'] };
 }
 export function affiliateKey(link: Pick<AffiliateInput,'marketplace'|'productId'|'channel'|'label'>): string { return [link.marketplace,link.productId,link.channel,link.label].join(':'); }

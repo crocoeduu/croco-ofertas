@@ -2,7 +2,7 @@
 
 Site publicado: [croco-ofertas.vercel.app](https://croco-ofertas.vercel.app). [Radar de Ofertas](https://croco-ofertas.vercel.app/radar). [Health check](https://croco-ofertas.vercel.app/api/health). Callback de produção: `https://croco-ofertas.vercel.app/api/mercadolivre/callback`. OAuth e persistência criptografada estão configurados. Veja [OPERACAO.md](OPERACAO.md) para a versão operacional atual; `VALIDACAO.md` registra os testes da etapa anterior.
 
-Central de ofertas em Next.js 16 (App Router), React 19, TypeScript, Node.js 24 e npm: OAuth Authorization Code com PKCE S256, persistência AES-GCM, busca backend de anúncios, histórico próprio, scoring explicável e cadastro de cupons não verificados. Afiliados e envio ao WhatsApp são etapas seguintes; links atuais não geram comissão.
+Central de ofertas em Next.js 16 (App Router), React 19, TypeScript, Node.js 24 e npm: OAuth Authorization Code com PKCE S256, persistência AES-GCM, busca backend de anúncios, histórico próprio, scoring explicável e cadastro de cupons não verificados. Links oficiais de afiliado são cadastrados pelo administrador e reutilizados por produto/canal. WhatsApp possui infraestrutura e worker opcional NÃO OFICIAL, com envio bloqueado por padrão; veja [a operação do worker](workers/whatsapp/README.md).
 
 ## Instalação e execução
 
@@ -149,7 +149,7 @@ Access/refresh tokens vazados são comprometidos: revogue a autorização/rotaci
 
 Os códigos internos incluem ENV_MISSING, ENV_INVALID, INVALID_STATE, PKCE_MISSING, CODE_MISSING, ACCESS_DENIED, TOKEN_ENDPOINT_ERROR, RATE_LIMITED, NETWORK_ERROR e STORAGE_ERROR. A mensagem pública é selecionada por uma lista fixa; valores do visitante, stack traces e erros do banco não são interpolados.
 
-## Expansão futura
+## Funcionalidades e integrações
 
 ### Radar de Ofertas
 
@@ -173,12 +173,16 @@ Após a primeira negação da busca de anúncios, há uma consulta ao catálogo 
 
 A versão atual separa `/dashboard`, `/radar`, `/monitoramento`, `/afiliados`, `/ofertas`, `/cupons`, `/distribuicao` e `/configuracoes`. Administração exige sessão ativa e `ADMIN_MELI_USER_ID` autorizado no servidor. Dashboard e páginas operacionais usam noindex; isso complementa a autorização, sem substituí-la.
 
-As migrations `20261015123227_radar_monitoring_queue.sql` e `20261015130223_watch_evidence.sql` adicionam monitoramento, alertas, configurações, campanhas, jobs, auditoria e fila sem apagar dados. A fila só simula; nenhum transporte de WhatsApp ou Shopee está configurado. Aprovação continua manual, com revalidação oficial e deduplicação antes de compor/simular.
+As migrations `20261015123227_radar_monitoring_queue.sql` e `20261015130223_watch_evidence.sql` adicionam monitoramento, alertas, configurações, campanhas, jobs, auditoria e fila sem apagar dados. A fila tem DRY RUN, claim/lease e transporte WhatsApp Web opcional em worker persistente separado, desativado por padrão. A publicação web não conecta WhatsApp nem habilita envio. Shopee e providers oficiais WhatsApp não estão configurados. Aprovação continua manual, com revalidação oficial e deduplicação antes de compor/simular.
 
 Links completos de produto podem ser guardados como pendentes e preservados integralmente. A ativação continua restrita ao formato oficial suportado com confirmação administrativa; não há API pública encontrada para comprovar titularidade. [OPERACAO.md](OPERACAO.md) detalha o caso MLB4609951889, limitações oficiais, parâmetros de segurança, custos, retenção e rollback.
 
 `lib/offers/contracts.ts` separa MercadoLivreSearchService, PriceHistoryService, OfferScoringService, AffiliateLinkService, AffiliateLinkProvider, CouponService e DistributionProvider. `providers/mercadolivre` e `providers/shopee` registram os limites da etapa atual.
 
-Campos como quantidade vendida, preço anterior, reputação e frete são opcionais, pois dependem de permissões e do que a API realmente oferece. Descontos devem ser confrontados com histórico próprio de observações; não considere um “OFF” informado pelo anúncio como comprovação. Busca de produtos e geração de links afiliados são funções distintas. Novas integrações serão oficiais, sem inventar APIs de Shopee/afiliados ou automatizar WhatsApp Web. APIs administrativas exigem autenticação, autorização server-side e controles CSRF; robots/noindex não são segurança.
+Campos como quantidade vendida, preço anterior, reputação e frete são opcionais, pois dependem de permissões e do que a API realmente oferece. Descontos devem ser confrontados com histórico próprio de observações; não considere um “OFF” informado pelo anúncio como comprovação. Busca de produtos e geração de links afiliados são funções distintas. Não há API inventada de Shopee/afiliados. O provider WhatsApp Web é opcional, NÃO OFICIAL e exige consentimento administrativo; não contém mecanismos de evasão. APIs administrativas exigem autenticação, autorização server-side e controles CSRF; robots/noindex não são segurança.
 
 Diagnóstico privado (com variáveis injetadas no ambiente seguro): `npm run db:check` executa `SELECT 1` e consultas sem tokens nas três tabelas. O servidor registra somente categorias fixas `DB_*`; nunca mensagens, URLs, senhas ou tokens.
+
+## Distribuição WhatsApp
+
+Painel administrativo: `/configuracoes/whatsapp`. Consulte [worker, requisitos e deploy Vertra](workers/whatsapp/README.md). A migration `20261015143843_whatsapp_delivery_control` já foi aplicada em produção e não deve ser reaplicada. O runner usa journal e locks transacionais, com testes de skip/rollback; não roda no build/login. `WHATSAPP_SEND_ENABLED` e `AUTO_SEND_ENABLED` ausentes ou falsas bloqueiam mensagens reais. Primeiro teste requer autorização específica; automação exige outra autorização.

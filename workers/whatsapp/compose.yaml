@@ -1,0 +1,22 @@
+services:
+  whatsapp-worker:
+    build: .
+    restart: "no"
+    init: true
+    mem_limit: 2g
+    cpus: 1.0
+    stop_grace_period: 90s
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    env_file: .env.local
+    environment:
+      WHATSAPP_STATE_DIRECTORY: /var/lib/croco
+      WHATSAPP_RUNTIME_DIRECTORY: /run/croco
+    volumes: [croco-session:/var/lib/croco]
+    tmpfs:
+      - /run/croco:uid=1000,gid=1000,mode=0700,size=512m
+      - /tmp:uid=1000,gid=1000,mode=1777,size=256m
+    shm_size: 256m
+volumes:
+  croco-session:

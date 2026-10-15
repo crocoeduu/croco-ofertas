@@ -14,3 +14,9 @@ Thumbs.db
 work/
 test-results/
 playwright-report/
+
+.wwebjs_auth/
+.wwebjs_cache/
+*.enc
+delivery-journal.json
+workers/whatsapp/node_modules/
