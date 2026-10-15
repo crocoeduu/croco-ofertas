@@ -16,3 +16,8 @@
 .offer-section .checkbox-label {display:flex;align-items:flex-start;gap:10px;grid-column:1/-1;font-size:14px}
 .offer-section .checkbox-label input {width:auto;min-height:0;margin-top:5px;flex:none}
 .history-scroll small {overflow-wrap:anywhere}
+.product-image.media-frame{aspect-ratio:4/3;min-height:160px;height:auto;overflow:hidden;background:#fff;border-radius:12px}
+.product-image.media-frame img{display:block;width:100%;height:180px;object-fit:contain}
+.image-fallback{display:flex;flex-direction:column;align-items:center;gap:8px;color:#63705b;font-size:12px}
+.image-fallback>span:first-child{font-size:38px;color:#acb8a3}
+.pending-badge{display:inline-flex;padding:8px;border-radius:8px;background:#fff6de;color:#705b26;font-size:12px}

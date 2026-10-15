@@ -1,0 +1,6 @@
+import {expect,it} from 'vitest';
+import {firstProductImage,productImageUrl} from '@/lib/offers/media';
+import {normalizeProduct} from '@/lib/mercadolivre/search';
+it('suporta hosts oficiais usados pelo catálogo e HTTPS',()=>{expect(productImageUrl('http://mla-s1-p.mlstatic.com/611193-MLA32649508843_102019-I.jpg')).toBe('https://mla-s1-p.mlstatic.com/611193-MLA32649508843_102019-I.jpg');expect(productImageUrl('https://http2.mlstatic.com/D_NQ_NP_615174-MLA117574223879_092026-F.jpg')).toBeDefined();});
+it('thumbnail vazia ou inválida não esconde outra foto oficial válida',()=>{expect(firstProductImage('',{url:'https://evil.test/a.jpg'},{secure_url:'https://http2.mlstatic.com/a.webp'})).toBe('https://http2.mlstatic.com/a.webp');const p=normalizeProduct({id:'MLB123456789',title:'Produto',price:10,currency_id:'BRL',permalink:'https://produto.mercadolivre.com.br/MLB-123456789-produto',secure_thumbnail:'',thumbnail:'http://http2.mlstatic.com/a.jpg'});expect(p?.imageUrl).toBe('https://http2.mlstatic.com/a.jpg');});
+it.each(['https://http2.mlstatic.com.evil.test/a.jpg','https://evil.mlstatic.com/a.jpg','https://user:pass@http2.mlstatic.com/a.jpg','https://http2.mlstatic.com:8443/a.jpg','javascript:alert(1)','https://http2.mlstatic.com/a.svg'])('bloqueia mídia arbitrária %s',url=>expect(productImageUrl(url)).toBeUndefined());

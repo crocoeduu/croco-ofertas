@@ -4,6 +4,7 @@ import type { Product, AffiliateResolution } from '@/lib/offers/contracts';
 import type { OfferScore } from '@/lib/offers/scoring';
 import type { Coupon } from '@/lib/offers/coupons';
 import type { SearchResult } from '@/lib/mercadolivre/search';
+import {ProductImage} from './product-image';
 
 type Offer = Product & { scoring: OfferScore; coupons: Coupon[]; affiliate: AffiliateResolution };
 type Results = Omit<SearchResult,'products'> & { products: Offer[]; observedAt: string; administrator:boolean };
@@ -41,14 +42,15 @@ export function OffersExplorer({connected}:{connected:boolean}) {
     <div aria-live="polite" aria-atomic="true">{results && <p className="results-note">{results.products.length} produtos nesta página{results.source==='catalog'?' · catálogo do Mercado Livre':''} · busca por “{searched}” · coleta em {date(results.observedAt)}</p>}</div>
     {results?.products.length === 0 && <p role="status">{results.priceCoverage && results.priceCoverage.matches>0 ? `O catálogo retornou ${results.priceCoverage.matches} produtos nesta página, mas não disponibilizou anúncios com preço válido. A coleta de preços aguarda dados disponíveis na API.` : 'Nenhum produto encontrado nesta busca. Tente uma marca ou modelo, por exemplo JBL.'}</p>}
     <div className="products-grid">{results?.products.map(product=><article className="product-card" key={product.id}>
-      <div className="product-image">{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" width="160" height="160" referrerPolicy="no-referrer"/> : <span>Sem imagem</span>}</div>
+      <ProductImage src={product.imageUrl} title={product.name}/>
       <span className="product-condition">{product.condition==='new'?'Novo':product.condition==='used'?'Usado':'Condição não informada'} · {product.id}</span>
       <h3>{product.name}</h3><div className="price-line">{product.previousPrice && <span className="previous-price">{money(product.previousPrice)}</span>}<strong>{money(product.price)}</strong></div>
       <span className="score-badge">Score {product.scoring.score}/100 · {product.scoring.sufficientHistory?'Com histórico':'Provisório'}</span>
       <ul className="score-reasons">{product.scoring.reasons.map(reason=><li key={reason}>{reason}</li>)}</ul>
       {product.coupons.length>0 && <p className="coupon-note">Cupons cadastrados: {product.coupons.map(c=>`${c.code} (${c.verified?'verificado':'não verificado'})`).join(', ')}. Condições e aplicação precisam ser confirmadas.</p>}
       <p className="coupon-note">{product.affiliate.status==='affiliate_ready'?'Link afiliado pronto · cadastrado pelo administrador':'Link afiliado pendente'}</p>
-      {product.affiliate.status==='affiliate_ready'?<><a className="product-link" href={product.affiliate.clickPath} rel="sponsored">Ver oferta →</a><p className="offer-help">Publicidade · Podemos receber comissão em compras elegíveis. Titularidade declarada pelo administrador.</p></>:<button disabled className="product-link">Ver oferta · link afiliado pendente</button>}
+      {product.affiliate.status==='affiliate_ready'?<><a className="product-link" href={product.affiliate.clickPath} rel="sponsored">Ver oferta →</a><p className="offer-help">Publicidade · Podemos receber comissão em compras elegíveis. Titularidade declarada pelo administrador.</p></>:<span className="pending-badge">Compartilhamento afiliado pendente</span>}
+      {results.administrator&&<a className="product-link" href={product.permalink} target="_blank" rel="noopener noreferrer">Ver anúncio original ↗</a>}
       {results.administrator&&<a href={`/afiliados?product_id=${product.id}#links`}>{product.affiliate.status==='affiliate_ready'?'Editar link afiliado':'Cadastrar link afiliado'}</a>}
       <details onToggle={event=>{if(event.currentTarget.open)void loadHistory(product.id);}}><summary>Histórico de preços · 30 dias</summary>
         {historyErrors[product.id]?<p role="alert">{historyErrors[product.id]}</p>:!histories[product.id]?<p>Carregando…</p>:<div className="history-scroll"><table><caption>Preços observados deste anúncio</caption><thead><tr><th>Data</th><th>Preço</th></tr></thead><tbody>{histories[product.id].map(entry=><tr key={entry.observedAt}><td>{date(entry.observedAt)}</td><td>{money(entry.price)}</td></tr>)}</tbody></table></div>}

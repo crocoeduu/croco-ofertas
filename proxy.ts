@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {imageHosts} from './lib/offers/media';
 export function proxy(request: NextRequest) {
   const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(18))));
   const dev = process.env.NODE_ENV !== 'production';
   const csp = [
     "default-src 'self'", `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ''}`,
-    `style-src 'self' 'nonce-${nonce}'`, "img-src 'self' data: https://http2.mlstatic.com", "font-src 'self'",
+    `style-src 'self' 'nonce-${nonce}'`, `img-src 'self' data: ${imageHosts.map(host=>`https://${host}`).join(' ')}`, "font-src 'self'",
     `connect-src 'self'${dev ? ' ws: wss:' : ''}`, "object-src 'none'", "base-uri 'none'",
     "form-action 'self'", "frame-ancestors 'none'", ...(dev ? [] : ['upgrade-insecure-requests'])
   ].join('; ');

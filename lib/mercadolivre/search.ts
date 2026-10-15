@@ -3,6 +3,7 @@ import { AppError } from '../errors';
 import type { Product } from '../offers/contracts';
 import { marketUrl, priceCents, productId, searchQuery } from '../offers/validation';
 import { getValidAccessToken } from './tokens';
+import {firstProductImage} from '../offers/media';
 
 export interface SearchResult { products: Product[]; total: number; offset: number; limit: number; source?: 'marketplace' | 'catalog'; priceCoverage?: {matches:number;active:number;winners:number;priced:number} }
 type SearchResource = 'marketplace' | 'catalog_search' | 'catalog_product' | 'catalog_offers';
@@ -106,7 +107,7 @@ export function normalizeProduct(value: unknown): Product | null {
     const shipping = record(item.shipping);
     const original = typeof item.original_price === 'number' && item.original_price > price ? priceCents(item.original_price) / 100 : undefined;
     return { provider: 'mercadolivre', id, name: item.title.trim(), price, currency: 'BRL', previousPrice: original,
-      permalink, imageUrl: marketUrl(item.secure_thumbnail ?? item.thumbnail, true),
+      permalink, imageUrl: firstProductImage(item.secure_thumbnail,item.thumbnail,...(Array.isArray(item.pictures)?item.pictures.slice(0,4):[])),
       shipping: shipping && typeof shipping.free_shipping === 'boolean' ? { free: shipping.free_shipping } : undefined,
       category: typeof item.category_id === 'string' && /^MLB\d{1,18}$/.test(item.category_id) ? item.category_id : undefined,
       condition: ['new', 'used', 'not_specified'].includes(String(item.condition)) ? item.condition as Product['condition'] : 'not_specified' };

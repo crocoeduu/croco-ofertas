@@ -1,4 +1,5 @@
 import { AppError } from '../errors';
+import { productImageUrl } from './media';
 export function productId(value: unknown): string {
   if (typeof value !== 'string' || !/^MLB[0-9]{6,18}$/.test(value)) throw new AppError('PRODUCT_INVALID');
   return value;
@@ -16,11 +17,12 @@ export function priceCents(value: unknown): number {
   return cents;
 }
 export function marketUrl(value: unknown, image = false): string | undefined {
+  if(image)return productImageUrl(value);
   if (typeof value !== 'string' || value.length > 2048) return undefined;
   try {
     const url = new URL(value);
     // Mercado Livre sometimes returns http permalinks; upgrade only these trusted hosts.
-    const validHost = image ? url.hostname === 'http2.mlstatic.com' : ['www.mercadolivre.com.br', 'produto.mercadolivre.com.br'].includes(url.hostname);
+    const validHost = ['www.mercadolivre.com.br', 'mercadolivre.com.br', 'produto.mercadolivre.com.br'].includes(url.hostname);
     if (!validHost || !['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port) return undefined;
     url.protocol = 'https:'; url.hash = ''; return url.href;
   } catch { return undefined; }
